@@ -19,3 +19,8 @@ dev = [
     "kaggle>=1.6.17",
     "ruff>=0.9.3",
 ]
+
+[tool.ruff]
+exclude = [
+    "kaggle_evaluation/**",
+]
