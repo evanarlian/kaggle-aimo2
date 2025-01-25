@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10.12"
 dependencies = [
+    "grpcio>=1.70.0",
     "pandas>=2.2.3",
     "polars>=1.21.0",
+    "pyarrow>=19.0.0",
     "torch>=2.3.0",
     "transformers>=4.48.1",
     "vllm>=0.5.0.post1",
@@ -24,3 +26,9 @@ dev = [
 exclude = [
     "kaggle_evaluation/**",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = ["kaggle_evaluation"] # allow importable from anywhere
