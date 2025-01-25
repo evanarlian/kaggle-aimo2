@@ -1,0 +1,21 @@
+[project]
+name = "kaggle-aimo2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10.12"
+dependencies = [
+    "pandas>=2.2.3",
+    "polars>=1.21.0",
+    "torch>=2.3.0",
+    "transformers>=4.48.1",
+    "vllm>=0.5.0.post1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ipython>=8.31.0",
+    "kaggle>=1.6.17",
+    "ruff>=0.9.3",
+]
