@@ -22,5 +22,6 @@ AI Mathematical Olympiad - Progress Prize 2
   * Qwen/Qwen2.5-32B-Instruct (apache license, 25 Sep 2024)
   * KirillR/QwQ-32B-Preview-AWQ (apache license, 28 Nov 2024)
   * deepseek-ai/DeepSeek-R1-Distill-Llama-70B (mit license, 23 Jan 2025)
+  * what is PRM model in Qwen math, also there is another one i believe
 * Need to get the AIME (or other math) score on above models.
 * read last year winning solution. here is huikangs recap: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/546772. Note that from last year solution, there are path without training at all
