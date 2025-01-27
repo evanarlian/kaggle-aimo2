@@ -11,17 +11,8 @@ AI Mathematical Olympiad - Progress Prize 2
 * look at huikang's TIR code
 * look at vllm install code
 * grab the inference server code from kaggle to run locally. IMPORTANT! 🔥
-* find the allowed models: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/548129. Look at the allowed commits **IMPORTANT**!!
+* find the allowed models: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/548129.
 * find vllm params, min-p sounds super good tbh!
 * Whitelisting: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/548129
-* The rules are: commit must be released before 1 Oct 2024, license must be very permissive. Legends (❓= not yet whitelisted). I want to use (make sure to download just the commit before 1 Oct 2024). Better to put in spreadsheet and link here. IMPORTANT! 🔥:
-  * Qwen/Qwen2.5-Math-72B-Instruct (qwen license❓, 23 Sep 2024)
-  * Qwen/Qwen2.5-Math-7B-Instruct (apache license, 23 Sep 2024)
-  * Valdemardi/DeepSeek-R1-Distill-Qwen-32B-AWQ (apache license, 20 Jan 2025❓)
-  * Qwen/Qwen2.5-72B-Instruct (qwen license❓, 25 Sep 2024)
-  * Qwen/Qwen2.5-32B-Instruct (apache license, 25 Sep 2024)
-  * KirillR/QwQ-32B-Preview-AWQ (apache license, 28 Nov 2024)
-  * deepseek-ai/DeepSeek-R1-Distill-Llama-70B (mit license, 23 Jan 2025)
-  * what is PRM model in Qwen math, also there is another one i believe
-* Need to get the AIME (or other math) score on above models.
+* Need to get the AIME (or other math) score on above models. My sheet https://docs.google.com/spreadsheets/d/1iMsuLom4x3nkSus9htpK6r7vyeLTb7Odl5jftEej2oA/edit?gid=0#gid=0. IMPORTANT! 🔥
 * read last year winning solution. here is huikangs recap: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/546772. Note that from last year solution, there are path without training at all
