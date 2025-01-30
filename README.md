@@ -13,5 +13,14 @@ AI Mathematical Olympiad - Progress Prize 2
 * grab the inference server code from kaggle to run locally. IMPORTANT! 🔥
 * find the allowed models: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/548129.
 * find vllm params, min-p sounds super good tbh!
-* Need to get the AIME (or other math) score on above models. My sheet https://docs.google.com/spreadsheets/d/1iMsuLom4x3nkSus9htpK6r7vyeLTb7Odl5jftEej2oA/edit?gid=0#gid=0. IMPORTANT! 🔥
 * read last year winning solution. here is huikangs recap: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/546772. Note that from last year solution, there are path without training at all
+* what is the difference between qwen instruct vs regular?
+* can deepseek R1 distill model do TIR? qwen can do both CoT and TIR, but i think deepseek's CoT is superior
+
+# Quick TODOS
+* Need to get the AIME (or other math) score on above models. My sheet https://docs.google.com/spreadsheets/d/1iMsuLom4x3nkSus9htpK6r7vyeLTb7Odl5jftEej2oA/edit?gid=0#gid=0. IMPORTANT! 🔥. Complete the sheet
+* Complete notion reading paper
+* make AWQ tutorial
+
+# just a thought
+* i think the winning trick is to combine deepseek's strong reasoning with qwen TIR (RAT method). Plus maj@k.
