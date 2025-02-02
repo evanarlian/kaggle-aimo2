@@ -24,6 +24,7 @@ AI Mathematical Olympiad - Progress Prize 2
 * make AWQ tutorial. IMPORTANT! 🔥
 * just submit once on kaggle to get the feel. IMPORTANT! 🔥
 * just sleep and return 0 to test the timing. IMPORTANT! 🔥
+* try on real L4 gpu on vast
 
 # make it fast
 * NOOO, the inference gateway is **forcing us to solve each question one by one**?? we cant leverage batching lol. Maybe we can use some crazy tricks like reference mutation, so that we can execute in parallel? If we cant cheat this system, we need to do 1 shot (or small shot) to stay under time limit (6min per Q).
@@ -37,3 +38,23 @@ AI Mathematical Olympiad - Progress Prize 2
 
 # just a thought
 * i think the winning trick is to combine deepseek's strong reasoning with qwen TIR (RAT method). Plus maj@k.
+
+# TIR hacking!!!!!!!!
+* This is a much simpler way to vs RAT + TIR, whatever
+* fyi qwen 32B distill is better at math vs qwen math, also better than coding vs qwen coder.
+* we can force inject code inside the thinking (and the stdout outputs) and the model will continue the code
+* beware of tabbed code like this, meed to be robust on the parser. The output should be tabbed as well to maintain coherence. Maybe use pydantic to store all parsed code.
+    ```python
+        a = 3
+        print(a)
+    ```
+* idea: if error occurs, we can force the model to fix it by injecting "Okay I think I need to fix the code"
+* idea: observe the model behavior during coding, sometimes the model is doing the code one by one, so we need to support stateful coding (like jupyter), maybe jupyter is the answer?
+* the hardest part is how to tell the model that it can use tools like this, I think this is not trivial due to lack of TIR training data during distillation
+* hmm can i combine some entropy magic (like entropix) to make a tree based decision?
+* maybe not entropix, but the idea is, at first, there is 3 (or more!) concurrent calls to vllm, the first one is code directly injected, the second one is code injected but late, the 3rd one is full blown reasoning (the 3rd one can be mixed with running code AFTER reasoning finishes to make sure what it spits are correct). Each branch can split to 3 other branch. This is sooooooooooo damn natural because we can just keep branching until time's up, and at the end we just use majority voting. We might be able to solve easy questions as well!!!!! this is due to BFS-like approach, if the all the child returns the same value, then you know you have something.
+* Managing time is quite challenging as well, can we adjust the time limit based on num questions left? e.g if we solve 49 easy, the last 1 we can take our sweet time, if time out then get the most vote (SC), or consensus reached
+* the voting can be coded like this, set a counter, minimum vote is 7. if a number is more than 50%, just terminate all branch, and move on!
+* we must nudge the model to use tools, it does not have to be perfect but think that tools are like calculator, we can whip it out like whenever we are stuck with a small part of the problem. how to prompt that?? Dont forget the prompt and 
+* Dont forget to parse the boxed, do logic of mod OUTSIDE, this is to make the task easier for model
+
