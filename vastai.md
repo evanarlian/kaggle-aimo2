@@ -32,6 +32,6 @@ Auth stuffs
 # manually fill .env first, or copy from local machine
 export $(cat .env | xargs)
 git config --global credential.helper store
-huggingface-cli login --token $HF_TOKEN --add-to-git-credential
-wandb login $WANDB_TOKEN
+uv run huggingface-cli login --token $HF_TOKEN --add-to-git-credential
+uv run wandb login $WANDB_TOKEN
 ```

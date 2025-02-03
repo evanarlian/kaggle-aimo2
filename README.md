@@ -59,3 +59,11 @@ AI Mathematical Olympiad - Progress Prize 2
 * we must nudge the model to use tools, it does not have to be perfect but think that tools are like calculator, we can whip it out like whenever we are stuck with a small part of the problem. how to prompt that?? Dont forget the prompt and 
 * Dont forget to parse the boxed, do logic of mod OUTSIDE, this is to make the task easier for model
 
+
+
+# vast ai todo
+* vast startup script change
+* deactivate original venv (DONT nuke because it has jupyter)
+* how to predownload using hf cli?
+* setup nginx how
+* disable workspace thingy and deactivate WORKSPACE line in bashrc
