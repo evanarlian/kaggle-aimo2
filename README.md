@@ -34,7 +34,8 @@ AI Mathematical Olympiad - Progress Prize 2
 * fast python executor, benchmark the library loading speed. sympy. Deepseek says we can leverage exec() for warm interpreter
 * tune vllm for even faster response
 * maybe tune the thinking not to be too verbose?
-* make cutoff time during inference so that we dont waste 
+* make cutoff time during inference so that we dont waste
+* running 4 vllms at the same time seem to be a good idea vs tensor parallel? check speed later
 
 # just a thought
 * i think the winning trick is to combine deepseek's strong reasoning with qwen TIR (RAT method). Plus maj@k.
