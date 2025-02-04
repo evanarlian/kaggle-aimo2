@@ -19,12 +19,17 @@ AI Mathematical Olympiad - Progress Prize 2
 * prompt must be crafted to be similar to the training condition
 * validation: use aime, math500, amc for validation. numina blogpost has these dataset ready to use for validation, but qwen math might be trained on them so i dunno, need to check. Use wandb for storing result.
 * try min-p sampling
+* reward model can be used to prune. REBASE paper
+* test time scaling with budget forcing paper. Literally just force add "Wait" in the sentence.
+* Pay attention to entropy, how can i leverage entropy information
+* try 70b reasoner?
 
 # Quick TODOS
 * make AWQ tutorial. IMPORTANT! 🔥
 * just submit once on kaggle to get the feel. IMPORTANT! 🔥
 * just sleep and return 0 to test the timing. IMPORTANT! 🔥
 * try on real L4 gpu on vast
+* run docker command vast locally to ensure im doing correct stuff (from the template from vast)
 
 # make it fast
 * NOOO, the inference gateway is **forcing us to solve each question one by one**?? we cant leverage batching lol. Maybe we can use some crazy tricks like reference mutation, so that we can execute in parallel? If we cant cheat this system, we need to do 1 shot (or small shot) to stay under time limit (6min per Q).
@@ -67,3 +72,6 @@ AI Mathematical Olympiad - Progress Prize 2
 * how to predownload using hf cli?
 * setup nginx how
 * disable workspace thingy and deactivate WORKSPACE line in bashrc
+* try on cheap machines to learn about the vastai docker
+* launch mode jupyter lab?
+* 
