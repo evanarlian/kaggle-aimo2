@@ -1,3 +1,5 @@
+nginx/nginx.pid
+nginx/logs
 data/
 wt/
 

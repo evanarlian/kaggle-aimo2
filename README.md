@@ -1,6 +1,17 @@
 # kaggle-aimo2
 AI Mathematical Olympiad - Progress Prize 2
 
+# usage
+Install deps
+```bash
+uv sync
+```
+
+Benchmark token/sec
+```bash
+uv run -m aimo2.benchmark --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100
+```
+
 # TODO
 * Make the model reliably generate tool calls in its thinking phase. We can distill this by using open ended generation in vllm (with stop token). Quite complicated.
 * Use chinese prompt as TTA. Can i use this chinese model as verifier model as well? We can do vice versa as well. https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/559418
