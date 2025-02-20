@@ -7,9 +7,18 @@ Install deps
 uv sync
 ```
 
-Benchmark token/sec
+Benchmark nginx token/sec. Edit the scripts to change settings.
 ```bash
-uv run -m aimo2.benchmark --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100
+./scripts/start_vllm.sh
+
+uv run -m aimo2.benchmark.openai_nginx --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100
+
+killall nginx vllm
+```
+
+Benchmark local vllm (with tensor parallel) token/sec.
+```bash
+uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100 --tp=1
 ```
 
 # TODO
