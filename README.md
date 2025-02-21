@@ -45,11 +45,8 @@ uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill
 * try 70b reasoner?
 
 # Quick TODOS
-* make AWQ tutorial. IMPORTANT! 🔥
 * just submit once on kaggle to get the feel. IMPORTANT! 🔥
 * just sleep and return 0 to test the timing. IMPORTANT! 🔥
-* try on real L4 gpu on vast
-* run docker command vast locally to ensure im doing correct stuff (from the template from vast)
 
 # make it fast
 * NOOO, the inference gateway is **forcing us to solve each question one by one**?? we cant leverage batching lol. Maybe we can use some crazy tricks like reference mutation, so that we can execute in parallel? If we cant cheat this system, we need to do 1 shot (or small shot) to stay under time limit (6min per Q).
@@ -87,6 +84,7 @@ uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill
 
 
 # vast ai todo
+* dont do vast, not important for inference
 * vast startup script change
 * deactivate original venv (DONT nuke because it has jupyter)
 * how to predownload using hf cli?
@@ -94,4 +92,3 @@ uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill
 * disable workspace thingy and deactivate WORKSPACE line in bashrc
 * try on cheap machines to learn about the vastai docker
 * launch mode jupyter lab?
-* 
