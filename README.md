@@ -21,6 +21,11 @@ Benchmark local vllm (with tensor parallel) token/sec.
 uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100 --tp=1
 ```
 
+Interesting findings about vLLM benchmark:
+* Setting temperature other than 1.0 will degrade perf, about 90% the original tok/s (RTX 3060)
+* Setting top_p other than 1.0 will degrade perf, about 66% the original tok/s (RTX 3060)
+
+
 # TODO
 * Make the model reliably generate tool calls in its thinking phase. We can distill this by using open ended generation in vllm (with stop token). Quite complicated.
 * Use chinese prompt as TTA. Can i use this chinese model as verifier model as well? We can do vice versa as well. https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/559418
