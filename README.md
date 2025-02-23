@@ -21,6 +21,11 @@ Benchmark local vllm (with tensor parallel) token/sec.
 uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100 --tp=1
 ```
 
+Benchmark at which batch size vLLM starts showing diminishing return of tok/sec. Note that this only measures single GPU (single vLLM server) for easier interpretation.
+```bash
+uv run -m aimo2.benchmark.batch_saturation --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --batch-sizes 1 2 4 8 16 32 64 128  --timeout=60
+```
+
 Interesting findings about vLLM benchmark:
 * Setting temperature other than 1.0 will degrade perf, about 90% the original tok/s (RTX 3060)
 * Setting top_p other than 1.0 will degrade perf, about 66% the original tok/s (RTX 3060)
