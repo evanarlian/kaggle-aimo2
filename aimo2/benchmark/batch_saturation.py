@@ -58,6 +58,7 @@ async def main(model: str, batch_sizes: list[int], timeout: float):
         with csv_file.open("a") as f:
             writer = csv.writer(f)
             writer.writerow([bs, total_tokens, timeout, tok_per_sec])
+        await asyncio.sleep(10)  # wait for previous session to clear up
 
 
 if __name__ == "__main__":

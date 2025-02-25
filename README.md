@@ -23,7 +23,8 @@ uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill
 
 Benchmark at which batch size vLLM starts showing diminishing return of tok/sec. Note that this only measures single GPU (single vLLM server) for easier interpretation.
 ```bash
-uv run -m aimo2.benchmark.batch_saturation --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --batch-sizes 1 2 4 8 16 32 64 128  --timeout=60
+# TODO update on kaggle, fine grained search on 16 - 128 bs
+uv run -m aimo2.benchmark.batch_saturation --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --batch-sizes 1 2 4 8 16 32 64 128 --timeout=60
 ```
 
 Interesting findings about vLLM benchmark:
