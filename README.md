@@ -37,7 +37,6 @@ Interesting findings about vLLM benchmark:
 * Use chinese prompt as TTA. Can i use this chinese model as verifier model as well? We can do vice versa as well. https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/559418
 * Output parsing. Mismatching output is exactly the issue huggingface team deal with. Somehow we need to parse latex to symbollic math before final answer. https://github.com/huggingface/Math-Verify
 * We can use deepseek's reasoning to boost other model perf. https://x.com/skirano/status/1882819133043323359
-* grab the inference server code from kaggle to run locally. IMPORTANT! 🔥
 * find vllm params, min-p sounds super good tbh!
 * read last year winning solution. here is huikangs recap: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/546772. Note that from last year solution, there are path without training at all
   * 3rd (https://www.kaggle.com/competitions/ai-mathematical-olympiad-prize/discussion/517206)
@@ -48,7 +47,7 @@ Interesting findings about vLLM benchmark:
     * use good evals
     * play with timings (TimeManager class)
     * dual gpu inference using threadpool
-* benchmark on how to saturate vllm? at which batch size the vllm is no longer benefiting from large batches. just use many asyncio tasks, and do not let one task finish early (just put in a while True), this is because we need to be consistent with batches. After some time passes, just kill all tasks at the same time.
+* benchmark on how to saturate vllm? i think saturation **might** not be the desired metric to strive for. This is because the generated token for AIME is long and im afraid too much parallelism will make everything not completing fast enough.
 * interesting observation: wrong answers have longer CoTs. https://x.com/AlexGDimakis/status/1885447830120362099. Replicate this and try to exploit this as well
 * prompt must be crafted to be similar to the training condition
 * validation: use aime, math500, amc for validation. numina blogpost has these dataset ready to use for validation, but qwen math might be trained on them so i dunno, need to check. Use wandb for storing result.
@@ -57,13 +56,8 @@ Interesting findings about vLLM benchmark:
 * test time scaling with budget forcing paper. Literally just force add "Wait" in the sentence.
 * Pay attention to entropy, how can i leverage entropy information
 
-# Quick TODOS
-* just submit once on kaggle to get the feel. IMPORTANT! 🔥
-* just sleep and return 0 to test the timing. IMPORTANT! 🔥
 
 # make it fast
-* NOOO, the inference gateway is **forcing us to solve each question one by one**?? we cant leverage batching lol. Maybe we can use some crazy tricks like reference mutation, so that we can execute in parallel? If we cant cheat this system, we need to do 1 shot (or small shot) to stay under time limit (6min per Q).
-* OR we can skip hard questions but the question comes randomly. i thought checking for hard questions can be done using thinking length, but that means we have to do the thinking first (wastes time), classic chicken and egg.
 * vllm server and client approach can be used to squeeze gpu utilization (this will be super useful for ToRA TIR loop since each batch requires different treatment based on TIR result).
 * vllm caching can be exploited if we ended up using RAT, because the reasoning is the same.
 * fast python executor, benchmark the library loading speed. sympy. Deepseek says we can leverage exec() for warm interpreter

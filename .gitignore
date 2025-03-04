@@ -1,3 +1,4 @@
+*.parquet
 nginx/nginx.pid
 nginx/logs
 data/
