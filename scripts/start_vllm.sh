@@ -10,4 +10,4 @@ done
 
 nginx -p nginx -c conf/nginx.conf
 
-# TODO tune vllm settings
+# TODO tune vllm settings, e.g. 0 logging
