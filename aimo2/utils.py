@@ -1,5 +1,6 @@
 import time
 
+import IPython.display as ipd
 import requests
 
 
@@ -18,3 +19,16 @@ def wait_for_vllm(ports: list[int], timeout: float) -> None:
                 if elapsed > timeout:
                     raise e
             time.sleep(1)
+
+
+def mdlatex(text) -> None:
+    """Modified deepseek completions tokens for easy viewing in jupyter notebook."""
+    escaped = (
+        text.replace("\\(", "$")
+        .replace("\\)", "$")
+        .replace("\\[", "$")
+        .replace("\\]", "$")
+        .replace("<think>", "***\\<think\\>***\n")
+        .replace("</think>", "\n***\\</think\\>***")
+    )
+    ipd.display(ipd.Markdown(escaped))

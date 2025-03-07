@@ -1,8 +1,9 @@
 import asyncio
 import os
+import random
 import time
 from collections import Counter
-from typing import Optional
+from typing import Literal, Optional
 
 import polars as pl
 from openai import AsyncOpenAI
@@ -11,12 +12,24 @@ from pydantic import BaseModel
 import kaggle_evaluation.aimo_2_inference_server
 
 
+class Prompt(BaseModel):
+    language: Literal["en", "zh"]
+    system: str
+    # TODO add code prompt later
+
+
 class ConversationResult(BaseModel):
-    pass
+    boxed_answer: str
+    elapsed: float
+    language: Literal["en", "zh"]
+    history: list[dict[Literal["system", "assistant", "user"], str]]
+    temperature: float
 
 
 class Timer:
     def __init__(self, n_questions: int, time_limit: float):
+        # TODO implement variable timing for hard tasks during early encounter
+        # TODO look at other people timing code
         self.n_questions = n_questions
         self.time_limit = time_limit
         self.t0 = time.perf_counter()
@@ -33,9 +46,36 @@ class Timer:
 timer = Timer(n_questions=10, time_limit=3600)
 
 
+def get_random_prompt() -> Prompt:
+    en_system_prompts = [
+        "Solve this math problem with a clear, step-by-step approach. Try a straightforward method and explain your reasoning. The answer is a whole integer, presented in \\boxed{}.",
+        "Tackle this math problem using an alternative method from your usual approach. Show your steps briefly. The answer, a whole integer, goes in \\boxed{}.",
+        "Analyze this math problem carefully, breaking it down logically. Focus on precision in your steps. The final whole integer answer must be in \\boxed{}.",
+        "Explore this math problem by testing a key idea or shortcut. Explain your process simply. The answer is a whole integer, shown in \\boxed{}.",
+        "Solve this math problem step-by-step, double-checking as you go. Keep it clear and concise. Place the whole integer answer in \\boxed{}.",
+    ]
+    zh_system_prompts = [
+        "用清晰的步骤快速解决这个数学问题，解释你的推理。答案是整数，放在 \\boxed{} 中。",
+        "用不同于常规的方法解决这个数学问题，简要展示步骤。答案是整数，写在 \\boxed{} 里。",
+        "仔细分析这个数学问题，逻辑清晰地分解步骤。最终整数答案放在 \\boxed{} 内。",
+        "通过尝试一个关键思路解决这个数学问题，简单说明过程。答案是整数，用 \\boxed{} 表示。",
+        "一步步解决这个数学问题，边做边检查，保持简洁。整数答案写在 \\boxed{} 中。",
+    ]
+    en_boxed_forcer = "So the final answer is \\boxed{"
+    # TODO add code prompts too
+    if random.random() < 0.5:
+        prompt = Prompt(language="en", system=random.choice(en_system_prompts))
+    else:
+        prompt = Prompt(language="zh", system=random.choice(zh_system_prompts))
+    return prompt
+
+
 async def conversation(q_text: str, client: AsyncOpenAI) -> ConversationResult:
     # TODO
     # implement repl, mod 1000, extraction etc
+    print(q_text)
+    await asyncio.sleep(10)
+
     return ConversationResult()
 
 

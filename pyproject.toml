@@ -27,12 +27,10 @@ dev = [
 ]
 
 [tool.ruff]
-exclude = [
-    "kaggle_evaluation/**",
-]
+exclude = ["kaggle_evaluation/**"]
 
 [tool.uv]
 package = true
 
 [tool.setuptools]
-packages = ["kaggle_evaluation"] # allow importable from anywhere
+packages = ["aimo2", "kaggle_evaluation"] # allow importable from anywhere
