@@ -1,5 +1,6 @@
 from typing import Optional
 
+import sympy
 from sympy.parsing.latex import parse_latex
 
 
@@ -22,15 +23,14 @@ def extract_boxed_text(text: str) -> Optional[str]:
     return None
 
 
-def latex_to_number(text: str) -> Optional[int | float]:
+def latex_to_int(text: str) -> Optional[int]:
     try:
         # lark backend due to antlr not working for some reason
         sympy_expr = parse_latex(text, backend="lark")
-        result = sympy_expr.evalf()
-        if result.is_real:
-            if result.is_integer:
-                return int(result)
-            return float(result)
+        # convert expr that is perfecly castable to integer, e.g.: sqrt(4) == 2.0, but thanks to Rational, we can detect this is in fact an int (2)
+        result = sympy.Rational(sympy_expr)
+        if result.is_integer:
+            return result.numerator // result.denominator
         return None
     except Exception:
         return None

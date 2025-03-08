@@ -10,7 +10,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 import kaggle_evaluation.aimo_2_inference_server
-from aimo2.parser import extract_boxed_text, latex_to_number
+from aimo2.parser import extract_boxed_text, latex_to_int
 
 
 class Prompt(BaseModel):
