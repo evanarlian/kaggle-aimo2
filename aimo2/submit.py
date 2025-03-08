@@ -16,6 +16,7 @@ from transformers import AutoTokenizer
 import kaggle_evaluation.aimo_2_inference_server
 from aimo2.parser import extract_boxed_text, latex_to_int
 from aimo2.timer import Timer
+from aimo2.utils import wib_now
 
 
 class Prompt(BaseModel):
@@ -227,7 +228,8 @@ async def solve_one(q_text: str, q_id: str) -> int:
     convos_list = await asyncio.gather(*worker_tasks)
     # save to json
     all_convos = sum(convos_list, [])
-    savepath = Path("all_convos.json")
+    savepath = Path("experiments") / f"exp_{wib_now()}.json"
+    savepath.parent.mkdir(parents=True, exist_ok=True)
     if savepath.exists():
         with open(savepath, "r") as f:
             existing = json.load(f)
@@ -269,8 +271,8 @@ def main():
     if os.getenv("KAGGLE_IS_COMPETITION_RERUN"):
         inference_server.serve()
     else:
-        # inference_server.run_local_gateway(("data/test.csv",))
-        inference_server.run_local_gateway(("data/reference.csv",))
+        inference_server.run_local_gateway(("data/test.csv",))
+        # inference_server.run_local_gateway(("data/reference.csv",))
         # sanity check
         df = pl.read_parquet("submission.parquet")
         print(df)

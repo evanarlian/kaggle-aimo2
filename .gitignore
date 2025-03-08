@@ -1,5 +1,5 @@
 *.parquet
-all_convos.json
+experiments/
 nginx/nginx.pid
 nginx/logs
 data/
