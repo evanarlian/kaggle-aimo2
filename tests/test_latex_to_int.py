@@ -24,6 +24,7 @@ def test_simple_expressions():
     assert latex_to_int("\\sqrt{16}") == 4
     assert latex_to_int("2^3") == 8
     assert latex_to_int("\\frac{3}{2} + 1") is None
+    # NOTE: huggingface's math-verify-0.7.0 fails on below latex
     assert latex_to_int("\\left\\lfloor 100 \\sqrt{2} \\right\\rfloor") == 141
 
 
