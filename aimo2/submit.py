@@ -1,12 +1,17 @@
 import asyncio
+import json
+import logging
 import os
 import random
+import time
 from collections import Counter
-from typing import Literal, Optional
+from pathlib import Path
+from typing import Any, Literal, Optional
 
 import polars as pl
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+from transformers import AutoTokenizer
 
 import kaggle_evaluation.aimo_2_inference_server
 from aimo2.parser import extract_boxed_text, latex_to_int
@@ -21,15 +26,29 @@ class Prompt(BaseModel):
 
 
 class ConversationResult(BaseModel):
-    boxed_answer: str
+    # TODO revamp later
+    q_id: str
+    boxed_answer: Optional[str]
+    parsed_answer: Optional[int]
     elapsed: float
     language: Literal["en", "zh"]
-    history: list[dict[Literal["system", "assistant", "user"], str]]
+    history: list[dict[Literal["role", "content"], str]]
     temperature: float
+    top_p: float
+    min_p: float
 
 
-# NOTE: change this according to the competition
-timer = Timer(n_questions=10, time_limit=3600)
+logging.basicConfig(level=logging.WARNING)  # sets 3rd party libs to WARNING
+logger = logging.getLogger("aimo2")  # selects the whole `aimo2` module tree
+logger.setLevel(logging.INFO)  # sets ours to INFO
+
+# NOTE: change below according to the competition
+N_PARALLEL = 32
+MIN_VOTES = 15
+MODEL = "casperhansen/deepseek-r1-distill-qwen-1.5b-awq"
+timer = Timer(n_questions=10, time_limit=0.9 * 1 * 60 * 60)  # 90% of n hours
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="-")
 
 
 def get_random_prompt() -> Prompt:
@@ -65,70 +84,165 @@ def get_random_prompt() -> Prompt:
     return prompt
 
 
-async def conversation(q_text: str, client: AsyncOpenAI) -> ConversationResult:
-    # TODO
-    # implement repl, mod 1000, extraction etc
-    print(q_text)
-    await asyncio.sleep(10)
+async def conversation(q_text: str, q_id: str) -> ConversationResult:
+    # 0. randomizer
+    t0 = time.perf_counter()
+    prompt = get_random_prompt()
+    temperature = 0.7  # TODO make random later
+    top_p = 0.95
+    min_p = 0.05
+    # 1. get answer initial answer
+    history: Any = [
+        {"role": "user", "content": q_text},
+    ]
+    completion1 = await client.chat.completions.create(
+        model=MODEL,
+        messages=history,
+        temperature=temperature,
+        top_p=top_p,
+        extra_body={"min_p": min_p},
+    )
+    assert completion1.choices[0].message.content is not None
+    reply1 = completion1.choices[0].message.content
+    history.append({"role": "assistant", "content": reply1})
+    # 2. force the model to output in the right format if not exist
+    box_content1 = extract_boxed_text(reply1)
+    logger.debug(f"[{q_id}] box_content1: {box_content1}")
+    if box_content1 is None:
+        # try to fix it once
+        history[-1]["content"] = (
+            history[-1]["content"].replace("</think>", "<think2>")
+            + prompt.boxed_enforcer
+        )
+        raw = tokenizer.apply_chat_template(
+            history,
+            tokenize=False,
+            add_generation_prompt=False,
+            continue_final_message=True,
+        ).replace("<think2>", "</think>")  # type: ignore
+        completion2 = await client.completions.create(
+            model=MODEL,
+            prompt=raw,
+            temperature=temperature,
+            top_p=top_p,
+            extra_body={"min_p": min_p},
+        )
+        reply2 = history[-1]["content"] + completion2.choices[0].text
+        history[-1]["content"] = reply2
+        box_content2 = extract_boxed_text(reply2)
+        logger.debug(f"[{q_id}] box_content2: {box_content2}")
+        if box_content2 is None:
+            # still no box after this, just bail
+            return ConversationResult(
+                q_id=q_id,
+                boxed_answer=None,
+                parsed_answer=None,
+                elapsed=time.perf_counter() - t0,
+                language=prompt.language,
+                history=history,
+                temperature=temperature,
+                top_p=top_p,
+                min_p=min_p,
+            )
+        box_content1 = box_content2
+    # 3. extract
+    predicted_num = latex_to_int(box_content1)
+    logger.debug(f"[{q_id}] predicted_num: {predicted_num}")
+    if predicted_num is None:
+        # unparsable number here
+        return ConversationResult(
+            q_id=q_id,
+            boxed_answer=box_content1,
+            parsed_answer=None,
+            elapsed=time.perf_counter() - t0,
+            language=prompt.language,
+            history=history,
+            temperature=temperature,
+            top_p=top_p,
+            min_p=min_p,
+        )
+    # TODO implement repl and more, mod 1000, extraction etc
+    # NOTE: the mod is being done at the very end so that we dont mess with history for the model
+    logger.info(f"[{q_id}] convo done!")
+    return ConversationResult(
+        q_id=q_id,
+        boxed_answer=box_content1,
+        parsed_answer=predicted_num % 1000,
+        elapsed=time.perf_counter() - t0,
+        language=prompt.language,
+        history=history,
+        temperature=temperature,
+        top_p=top_p,
+        min_p=min_p,
+    )
 
-    return ConversationResult()
 
-
-async def worker(
-    q_text: str, voting: Counter, client: AsyncOpenAI
-) -> list[ConversationResult]:
+async def worker(q_text: str, q_id: str, voting: Counter) -> list[ConversationResult]:
     convos = []
     try:
         while True:
-            convo = await conversation(q_text, client)
+            convo = await conversation(q_text, q_id)
             convos.append(convo)
-    except asyncio.CancelledError:
+            if convo.parsed_answer is not None:
+                voting[convo.parsed_answer] += 1
+    except Exception:
+        logger.exception("[{q_id}] unexpected worker error")
+    finally:
         return convos
 
 
-async def monitor_voting(voting: Counter, min_votes: int) -> None:
-    assert min_votes > 0
+async def monitor_voting(voting: Counter) -> None:
+    assert MIN_VOTES > 0
     while True:
         await asyncio.sleep(0.1)
         total_votes = sum(voting.values())
-        if total_votes < min_votes:
+        if total_votes < MIN_VOTES:
             continue
         answer, n_votes = voting.most_common(1)[0]
         if n_votes > total_votes // 2:
             break
 
 
-async def solve_one(q_text: str) -> int:
+async def solve_one(q_text: str, q_id: str) -> int:
     """Manages workers (parallel calls to vllm)"""
-    N_PARALLEL = 4
-    MIN_VOTES = 11
     allowed_time = timer.start_question()
-    print(allowed_time)
-    # this client should point to nginx
-    client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="-")
+    t0 = time.perf_counter()
+    logger.info(f"[{q_id}] allowed time: {allowed_time}")
     voting = Counter()
+    logger.info(f"[{q_id}] creating {N_PARALLEL} workers")
     worker_tasks = [
-        asyncio.create_task(worker(q_text, voting, client)) for _ in range(N_PARALLEL)
+        asyncio.create_task(worker(q_text, q_id, voting)) for _ in range(N_PARALLEL)
     ]
     # waits for either timeout or monitor voting finishes first
     try:
-        await asyncio.wait_for(
-            monitor_voting(voting, min_votes=MIN_VOTES), timeout=allowed_time
-        )
+        await asyncio.wait_for(monitor_voting(voting), timeout=allowed_time)
     except asyncio.TimeoutError:
-        print("Time's up!")
+        logger.info(f"[{q_id}] killing workers: timeout")
     else:
-        print("Domination reached.")
-    # stopping all workers, and collecting all the conversations
+        elapsed = time.perf_counter() - t0
+        logger.info(f"[{q_id}] killing workers: > 50% reached in {elapsed:0.2f} secs")
+    # stop all workers and collect all the conversations
     for worker_task in worker_tasks:
         worker_task.cancel()
     convos_list = await asyncio.gather(*worker_tasks)
-    all_convos = sum(convos_list, [])  # TODO save to file or smth
+    # save to json
+    all_convos = sum(convos_list, [])
+    savepath = Path("all_convos.json")
+    if savepath.exists():
+        with open(savepath, "r") as f:
+            existing = json.load(f)
+    else:
+        existing = []
+    existing += [c.model_dump() for c in all_convos]
+    with open(savepath, "w") as f:
+        json.dump(existing, f, indent=4)
+    logger.info(f"[{q_id}] convos added to {savepath}")
     try:
         answer, n_votes = voting.most_common(1)[0]
     except IndexError:
-        print("There are no votes at all, convo might be too long.")
+        logger.warning(f"[{q_id}] there are no votes at all, convos might be too long")
         answer = 0
+    # complete!
     timer.finish_question()
     return answer
 
@@ -144,7 +258,7 @@ def predict(
     id_ = id_.item(0)
     q_text = question.item(0)
     # Make a prediction
-    prediction = asyncio.run(solve_one(q_text))
+    prediction = asyncio.run(solve_one(q_text, id_))  # type: ignore
     return pl.DataFrame({"id": id_, "answer": prediction})
 
 
