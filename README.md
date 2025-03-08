@@ -1,6 +1,7 @@
 # kaggle-aimo2
 AI Mathematical Olympiad - Progress Prize 2
 
+
 # usage
 Install deps
 ```bash
@@ -30,6 +31,13 @@ uv run -m aimo2.benchmark.batch_saturation --model=casperhansen/deepseek-r1-dist
 Interesting findings about vLLM benchmark:
 * Setting temperature other than 1.0 will degrade perf, about 90% the original tok/s (RTX 3060)
 * Setting top_p other than 1.0 will degrade perf, about 66% the original tok/s (RTX 3060)
+
+
+# development
+Run tests
+```bash
+uv run pytest
+```
 
 
 # TODO

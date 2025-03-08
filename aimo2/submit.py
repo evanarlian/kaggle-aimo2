@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 import kaggle_evaluation.aimo_2_inference_server
+from aimo2.parser import extract_boxed_text, latex_to_number
 
 
 class Prompt(BaseModel):
@@ -26,6 +27,7 @@ class ConversationResult(BaseModel):
     temperature: float
 
 
+# TODO move out
 class Timer:
     def __init__(self, n_questions: int, time_limit: float):
         # TODO implement variable timing for hard tasks during early encounter
@@ -47,6 +49,7 @@ timer = Timer(n_questions=10, time_limit=3600)
 
 
 def get_random_prompt() -> Prompt:
+    # TODO dont answer in whole integer!!, use smart parsing
     en_system_prompts = [
         "Solve this math problem with a clear, step-by-step approach. Try a straightforward method and explain your reasoning. The answer is a whole integer, presented in \\boxed{}.",
         "Tackle this math problem using an alternative method from your usual approach. Show your steps briefly. The answer, a whole integer, goes in \\boxed{}.",
@@ -54,6 +57,7 @@ def get_random_prompt() -> Prompt:
         "Explore this math problem by testing a key idea or shortcut. Explain your process simply. The answer is a whole integer, shown in \\boxed{}.",
         "Solve this math problem step-by-step, double-checking as you go. Keep it clear and concise. Place the whole integer answer in \\boxed{}.",
     ]
+    # TODO dont answer in whole integer!!, use smart parsing
     zh_system_prompts = [
         "用清晰的步骤快速解决这个数学问题，解释你的推理。答案是整数，放在 \\boxed{} 中。",
         "用不同于常规的方法解决这个数学问题，简要展示步骤。答案是整数，写在 \\boxed{} 里。",

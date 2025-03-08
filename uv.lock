@@ -1237,6 +1237,7 @@ dependencies = [
     { name = "polars" },
     { name = "pyarrow" },
     { name = "setuptools" },
+    { name = "sympy" },
     { name = "torch" },
     { name = "transformers" },
     { name = "vllm" },
@@ -1249,6 +1250,7 @@ dev = [
     { name = "ipython" },
     { name = "ipywidgets" },
     { name = "kaggle" },
+    { name = "pytest" },
     { name = "ruff" },
 ]
 
@@ -1260,6 +1262,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.21.0" },
     { name = "pyarrow", specifier = ">=19.0.0" },
     { name = "setuptools", specifier = ">=75.8.0" },
+    { name = "sympy", specifier = ">=1.13.1" },
     { name = "torch", specifier = ">=2.3.0" },
     { name = "transformers", specifier = ">=4.48.1" },
     { name = "vllm", specifier = "==0.7.1" },
@@ -1272,6 +1275,7 @@ dev = [
     { name = "ipython", specifier = ">=8.31.0" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "kaggle", specifier = ">=1.6.17" },
+    { name = "pytest", specifier = ">=8.3.4" },
     { name = "ruff", specifier = ">=0.9.3" },
 ]
 
@@ -2438,11 +2442,11 @@ version = "8.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "exceptiongroup", marker = "(python_full_version < '3.11' and platform_machine != 'aarch64') or (python_full_version < '3.11' and sys_platform != 'linux')" },
-    { name = "iniconfig", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'" },
-    { name = "packaging", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'" },
-    { name = "pluggy", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'" },
-    { name = "tomli", marker = "(python_full_version < '3.11' and platform_machine != 'aarch64') or (python_full_version < '3.11' and sys_platform != 'linux')" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/05/35/30e0d83068951d90a01852cb1cef56e5d8a09d20c7f511634cc2f7e0372a/pytest-8.3.4.tar.gz", hash = "sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761", size = 1445919 }
 wheels = [
