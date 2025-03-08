@@ -1,7 +1,6 @@
 import asyncio
 import os
 import random
-import time
 from collections import Counter
 from typing import Literal, Optional
 
@@ -11,11 +10,13 @@ from pydantic import BaseModel
 
 import kaggle_evaluation.aimo_2_inference_server
 from aimo2.parser import extract_boxed_text, latex_to_int
+from aimo2.timer import Timer
 
 
 class Prompt(BaseModel):
     language: Literal["en", "zh"]
     system: str
+    boxed_enforcer: str
     # TODO add code prompt later
 
 
@@ -27,29 +28,11 @@ class ConversationResult(BaseModel):
     temperature: float
 
 
-# TODO move out
-class Timer:
-    def __init__(self, n_questions: int, time_limit: float):
-        # TODO implement variable timing for hard tasks during early encounter
-        # TODO look at other people timing code
-        self.n_questions = n_questions
-        self.time_limit = time_limit
-        self.t0 = time.perf_counter()
-
-    def start_question(self) -> float:
-        remaining = self.time_limit - (time.perf_counter() - self.t0)
-        return remaining / self.n_questions
-
-    def finish_question(self) -> None:
-        self.n_questions -= 1
-
-
 # NOTE: change this according to the competition
 timer = Timer(n_questions=10, time_limit=3600)
 
 
 def get_random_prompt() -> Prompt:
-    # TODO dont answer in whole integer!!, use smart parsing
     en_system_prompts = [
         "Solve this math problem with a clear, step-by-step approach. Try a straightforward method and explain your reasoning. The answer is a whole integer, presented in \\boxed{}.",
         "Tackle this math problem using an alternative method from your usual approach. Show your steps briefly. The answer, a whole integer, goes in \\boxed{}.",
@@ -57,7 +40,6 @@ def get_random_prompt() -> Prompt:
         "Explore this math problem by testing a key idea or shortcut. Explain your process simply. The answer is a whole integer, shown in \\boxed{}.",
         "Solve this math problem step-by-step, double-checking as you go. Keep it clear and concise. Place the whole integer answer in \\boxed{}.",
     ]
-    # TODO dont answer in whole integer!!, use smart parsing
     zh_system_prompts = [
         "用清晰的步骤快速解决这个数学问题，解释你的推理。答案是整数，放在 \\boxed{} 中。",
         "用不同于常规的方法解决这个数学问题，简要展示步骤。答案是整数，写在 \\boxed{} 里。",
@@ -65,12 +47,21 @@ def get_random_prompt() -> Prompt:
         "通过尝试一个关键思路解决这个数学问题，简单说明过程。答案是整数，用 \\boxed{} 表示。",
         "一步步解决这个数学问题，边做边检查，保持简洁。整数答案写在 \\boxed{} 中。",
     ]
-    en_boxed_forcer = "So the final answer is \\boxed{"
+    en_boxed_enforcer = "\n\n**Final Answer:**\n\\[\n\\boxed{"
+    zh_boxed_enforcer = "\n\n**答案是:**\n\\[\n\\boxed{"
     # TODO add code prompts too
     if random.random() < 0.5:
-        prompt = Prompt(language="en", system=random.choice(en_system_prompts))
+        prompt = Prompt(
+            language="en",
+            system=random.choice(en_system_prompts),
+            boxed_enforcer=en_boxed_enforcer,
+        )
     else:
-        prompt = Prompt(language="zh", system=random.choice(zh_system_prompts))
+        prompt = Prompt(
+            language="zh",
+            system=random.choice(zh_system_prompts),
+            boxed_enforcer=zh_boxed_enforcer,
+        )
     return prompt
 
 
