@@ -186,7 +186,7 @@ async def worker(q_text: str, q_id: str, voting: Counter) -> list[ConversationRe
             if convo.parsed_answer is not None:
                 voting[convo.parsed_answer] += 1
     except Exception:
-        logger.exception("[{q_id}] unexpected worker error")
+        logger.exception(f"[{q_id}] unexpected worker error")
     finally:
         return convos
 
@@ -269,8 +269,8 @@ def main():
     if os.getenv("KAGGLE_IS_COMPETITION_RERUN"):
         inference_server.serve()
     else:
-        inference_server.run_local_gateway(("data/test.csv",))
-        # inference_server.run_local_gateway(("data/reference.csv",))
+        # inference_server.run_local_gateway(("data/test.csv",))
+        inference_server.run_local_gateway(("data/reference.csv",))
         # sanity check
         df = pl.read_parquet("submission.parquet")
         print(df)
