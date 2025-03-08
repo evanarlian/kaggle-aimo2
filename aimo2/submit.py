@@ -147,7 +147,7 @@ async def conversation(q_text: str, q_id: str) -> ConversationResult:
         box_content1 = box_content2
     # 3. extract
     predicted_num = latex_to_int(box_content1)
-    logger.debug(f"[{q_id}] predicted_num: {predicted_num}")
+    logger.info(f"[{q_id}] predicted_num: {predicted_num}")
     if predicted_num is None:
         # unparsable number here
         return ConversationResult(
