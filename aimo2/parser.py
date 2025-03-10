@@ -27,7 +27,8 @@ def latex_to_int(text: str) -> Optional[int]:
     try:
         # lark backend due to antlr not working for some reason
         sympy_expr = parse_latex(text, backend="lark")
-        # convert expr that is perfecly castable to integer, e.g.: sqrt(4) == 2.0, but thanks to Rational, we can detect this is in fact an int (2)
+        # convert expr that is perfecly castable to integer, e.g.: sqrt(4) == 2.0
+        # but thanks to Rational, we can detect this is in fact an int (2)
         result = sympy.Rational(sympy_expr)
         if result.is_integer:
             return result.numerator // result.denominator

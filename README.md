@@ -41,6 +41,13 @@ uv run pytest
 
 
 # TODO
+* Check unsloth-lie trick during awq
+* Use PRM model, hope unsloth have this as well
+  * https://medium.com/@isaakmwangi2018/test-time-compute-scaling-how-to-make-an-llm-think-longer-on-harder-problems-like-openais-o1-ace34c81c75c
+* Set max model len
+* More prompt engineering: You are very knowledgeable. An expert. Think and respond with confidence.  
+  * Also, i think chinese prompt are a pain to judge, keep just english??
+* Make `Config` class, do i dont have to do stupid shit
 * Make the model reliably generate tool calls in its thinking phase. We can distill this by using open ended generation in vllm (with stop token). Quite complicated.
 * Use chinese prompt as TTA. Can i use this chinese model as verifier model as well? We can do vice versa as well. https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/559418
 * Output parsing. Mismatching output is exactly the issue huggingface team deal with. Somehow we need to parse latex to symbollic math before final answer. https://github.com/huggingface/Math-Verify
@@ -59,7 +66,6 @@ uv run pytest
 * interesting observation: wrong answers have longer CoTs. https://x.com/AlexGDimakis/status/1885447830120362099. Replicate this and try to exploit this as well
 * prompt must be crafted to be similar to the training condition
 * validation: use aime, math500, amc for validation. numina blogpost has these dataset ready to use for validation, but qwen math might be trained on them so i dunno, need to check. Use wandb for storing result.
-* try min-p sampling
 * reward model can be used to prune. 'REBASE' paper
 * test time scaling with budget forcing paper. Literally just force add "Wait" in the sentence.
 * Pay attention to entropy, how can i leverage entropy information

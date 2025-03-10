@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime
 
@@ -43,3 +44,9 @@ def wib_now() -> str:
     wib = pytz.timezone("Asia/Jakarta")
     timestamp = datetime.now(wib).strftime("%Y-%m-%d__%H.%M.%S")
     return timestamp
+
+
+def is_kaggle() -> bool:
+    return bool(
+        os.getenv("KAGGLE_KERNEL_RUN_TYPE") or os.getenv("KAGGLE_IS_COMPETITION_RERUN")
+    )
