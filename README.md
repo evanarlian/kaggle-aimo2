@@ -41,7 +41,6 @@ uv run pytest
 
 
 # TODO
-* Check unsloth-lie trick during awq
 * Use PRM model, hope unsloth have this as well
   * https://medium.com/@isaakmwangi2018/test-time-compute-scaling-how-to-make-an-llm-think-longer-on-harder-problems-like-openais-o1-ace34c81c75c
 * Set max model len
@@ -107,3 +106,7 @@ uv run pytest
 * disable workspace thingy and deactivate WORKSPACE line in bashrc
 * try on cheap machines to learn about the vastai docker
 * launch mode jupyter lab?
+
+# notes
+* awq is much faster than unsloth dynamic quants (bnb). On my machine, r1 1.5b, bs 16: awq (1423 tok/s) while bnb (399 tok/s). Need further investigation.
+* [math-verify](https://github.com/huggingface/Math-Verify) by huggingface for parsing math, but fails on this latex -> `\\left\\lfloor 100 \\sqrt{2} \\right\\rfloor`. Answer should be 141.
