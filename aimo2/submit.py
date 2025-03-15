@@ -30,7 +30,6 @@ class Config(BaseModel):
 
 
 class Prompt(BaseModel):
-    language: Literal["en", "zh"]
     system: str
     boxed_enforcer: str
     # TODO add code prompt later
@@ -39,7 +38,6 @@ class Prompt(BaseModel):
 class ConversationResult(BaseModel):
     boxed_answer: Optional[str]
     parsed_answer: Optional[int]
-    language: Literal["en", "zh"]
     history: list[dict[Literal["role", "content"], str]]
     temperature: float
     top_p: float
@@ -60,29 +58,12 @@ def get_random_prompt() -> Prompt:
         "Explore this math problem by testing a key idea or shortcut. Explain your process simply. The answer is a whole integer, shown in \\boxed{}.",
         "Solve this math problem step-by-step, double-checking as you go. Keep it clear and concise. Place the whole integer answer in \\boxed{}.",
     ]
-    zh_system_prompts = [
-        "用清晰的步骤快速解决这个数学问题，解释你的推理。答案是整数，放在 \\boxed{} 中。",
-        "用不同于常规的方法解决这个数学问题，简要展示步骤。答案是整数，写在 \\boxed{} 里。",
-        "仔细分析这个数学问题，逻辑清晰地分解步骤。最终整数答案放在 \\boxed{} 内。",
-        "通过尝试一个关键思路解决这个数学问题，简单说明过程。答案是整数，用 \\boxed{} 表示。",
-        "一步步解决这个数学问题，边做边检查，保持简洁。整数答案写在 \\boxed{} 中。",
-    ]
     en_boxed_enforcer = "\n\n**Final Answer:**\n\\[\n\\boxed{"
-    zh_boxed_enforcer = "\n\n**答案是:**\n\\[\n\\boxed{"
     # TODO add code prompts too
-    if random.random() < 0.5:
-        prompt = Prompt(
-            language="en",
-            system=random.choice(en_system_prompts),
-            boxed_enforcer=en_boxed_enforcer,
-        )
-    else:
-        prompt = Prompt(
-            language="zh",
-            system=random.choice(zh_system_prompts),
-            boxed_enforcer=zh_boxed_enforcer,
-        )
-    return prompt
+    return Prompt(
+        system=random.choice(en_system_prompts),
+        boxed_enforcer=en_boxed_enforcer,
+    )
 
 
 async def conversation(
@@ -99,6 +80,7 @@ async def conversation(
     min_p = 0.05
     # 1. get answer initial answer
     history: Any = [
+        {"role": "system", "content": prompt.system},
         {"role": "user", "content": q_text},
     ]
     completion1 = await client.chat.completions.create(
@@ -143,7 +125,6 @@ async def conversation(
             return ConversationResult(
                 boxed_answer=None,
                 parsed_answer=None,
-                language=prompt.language,
                 history=history,
                 temperature=temperature,
                 top_p=top_p,
@@ -158,7 +139,6 @@ async def conversation(
         return ConversationResult(
             boxed_answer=box_content1,
             parsed_answer=None,
-            language=prompt.language,
             history=history,
             temperature=temperature,
             top_p=top_p,
@@ -170,7 +150,6 @@ async def conversation(
     return ConversationResult(
         boxed_answer=box_content1,
         parsed_answer=predicted_num % 1000,
-        language=prompt.language,
         history=history,
         temperature=temperature,
         top_p=top_p,
