@@ -96,6 +96,12 @@ uv run pytest
 * we must nudge the model to use tools, it does not have to be perfect but think that tools are like calculator, we can whip it out like whenever we are stuck with a small part of the problem. how to prompt that? 
 * Dont forget to parse the boxed, do logic of mod OUTSIDE, this is to make the task easier for model
 
+# vllm tune (do this on real kaggle submit kernel after modifying prompt forcing)
+* preempt issues on check, see https://docs.vllm.ai/en/latest/performance/optimization.html.
+* check vllm logs in kaggle to document mem used for gpu, for peak, for kv cache. Make sure the kv cache data type and use https://lmcache.ai/kv_cache_calculator.html to calculate.
+* prompt forcing should add missing </ think> token if needed, check result first
+* timer should allow one last time of giving answer, dont kill too early before prompt forcing
+* maybe timer should be placed on worker instead
 
 # vast ai todo
 * dont do vast, not important for inference
@@ -111,3 +117,6 @@ uv run pytest
 * awq is much faster than unsloth dynamic quants (bnb). On my machine, r1 1.5b, bs 16: awq (1423 tok/s) while bnb (399 tok/s). Need further investigation.
 * [math-verify](https://github.com/huggingface/Math-Verify) by huggingface for parsing math, but fails on this latex -> `\\left\\lfloor 100 \\sqrt{2} \\right\\rfloor`. Answer should be 141.
 * found out that using english prompt is better than using both english and chinese prompt (22 vs 17 score respectively). I removed the chinese prompt
+* make sure vllm's `--max-seq-len-to-capture` covers your token range. Helps a little bit since the model does not fallback to eager execution. TODO try on kaggle's gpu
+* stop at </ think>, this is because the llm sometimes tried to make the answer presentable to the user, which can be long
+* use temp 1.0 (default) because it will speed up a lot

@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Literal, Optional
 
+import numpy as np
 import polars as pl
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -30,15 +31,16 @@ class Config(BaseModel):
 
 
 class Prompt(BaseModel):
-    system: str
+    system: Optional[str]
     boxed_enforcer: str
-    # TODO add code prompt later
 
 
 class ConversationResult(BaseModel):
     boxed_answer: Optional[str]
     parsed_answer: Optional[int]
     history: list[dict[Literal["role", "content"], str]]
+    mean_logprob: float
+    std_logprob: float
     temperature: float
     top_p: float
     min_p: float
@@ -51,15 +53,16 @@ class ConversationReport(ConversationResult):
 
 
 def get_random_prompt() -> Prompt:
+    # TODO i might not need Prompt pydantic obj, just return concise system prompt,
+    # TODO select best system prompt using lambdalabs
     en_system_prompts = [
-        "Solve this math problem with a clear, step-by-step approach. Try a straightforward method and explain your reasoning. The answer is a whole integer, presented in \\boxed{}.",
-        "Tackle this math problem using an alternative method from your usual approach. Show your steps briefly. The answer, a whole integer, goes in \\boxed{}.",
-        "Analyze this math problem carefully, breaking it down logically. Focus on precision in your steps. The final whole integer answer must be in \\boxed{}.",
-        "Explore this math problem by testing a key idea or shortcut. Explain your process simply. The answer is a whole integer, shown in \\boxed{}.",
-        "Solve this math problem step-by-step, double-checking as you go. Keep it clear and concise. Place the whole integer answer in \\boxed{}.",
+        None,
+        None,
+        "Final answer inside \\boxed{}.",
+        "Be concise, put the final answer in \\boxed{}.",
+        "You are a great mathematician, be confident, put the final answer in \\boxed{}.",
     ]
     en_boxed_enforcer = "\n\n**Final Answer:**\n\\[\n\\boxed{"
-    # TODO add code prompts too
     return Prompt(
         system=random.choice(en_system_prompts),
         boxed_enforcer=en_boxed_enforcer,
@@ -75,23 +78,27 @@ async def conversation(
 ) -> ConversationResult:
     # 0. randomizer
     prompt = get_random_prompt()
-    temperature = 0.7  # TODO make random later
-    top_p = 0.95
-    min_p = 0.05
+    temperature = 1.0  # TODO make random later? we need speed tho
+    top_p = 0.9
+    min_p = 0.1
     # 1. get answer initial answer
-    history: Any = [
-        {"role": "system", "content": prompt.system},
-        {"role": "user", "content": q_text},
-    ]
+    history: Any = []
+    if prompt.system is not None:
+        history.append({"role": "system", "content": prompt.system})
+    history.append({"role": "user", "content": q_text})
     completion1 = await client.chat.completions.create(
-        # TODO set max model length?? why
         model=cfg.model,
         messages=history,
+        logprobs=True,
         temperature=temperature,
         top_p=top_p,
+        stop=["</think>"],  # don't waste time on repeating what the model knows
         extra_body={"min_p": min_p},
     )
+    assert completion1.choices[0].logprobs is not None
+    assert completion1.choices[0].logprobs.content is not None
     assert completion1.choices[0].message.content is not None
+    logprobs = np.array([lp.logprob for lp in completion1.choices[0].logprobs.content])
     reply1 = completion1.choices[0].message.content
     history.append({"role": "assistant", "content": reply1})
     # 2. force the model to output in the right format if not exist
@@ -126,6 +133,8 @@ async def conversation(
                 boxed_answer=None,
                 parsed_answer=None,
                 history=history,
+                mean_logprob=logprobs.mean(),
+                std_logprob=logprobs.std(),
                 temperature=temperature,
                 top_p=top_p,
                 min_p=min_p,
@@ -140,17 +149,19 @@ async def conversation(
             boxed_answer=box_content1,
             parsed_answer=None,
             history=history,
+            mean_logprob=logprobs.mean(),
+            std_logprob=logprobs.std(),
             temperature=temperature,
             top_p=top_p,
             min_p=min_p,
         )
-    # TODO implement repl and more, mod 1000, extraction etc
-    # NOTE: the mod is being done at the very end so that we dont mess with history for the model
     logger.info(f"[{q_id}] convo done!")
     return ConversationResult(
         boxed_answer=box_content1,
         parsed_answer=predicted_num % 1000,
         history=history,
+        mean_logprob=logprobs.mean(),
+        std_logprob=logprobs.std(),
         temperature=temperature,
         top_p=top_p,
         min_p=min_p,
@@ -165,26 +176,24 @@ async def worker(
     client: AsyncOpenAI,
     tokenizer: PreTrainedTokenizer,
     cfg: Config,
-) -> list[ConversationReport]:
-    reports = []
+) -> Optional[ConversationReport]:
     try:
-        while True:
-            t0 = time.perf_counter()
-            convo = await conversation(q_text, q_id, client, tokenizer, cfg)
-            elapsed = time.perf_counter() - t0
-            report = ConversationReport(
-                **convo.model_dump(),
-                q_id=q_id,
-                gt_answer=gt_answer,
-                elapsed=elapsed,
-            )
-            reports.append(report)
-            if report.parsed_answer is not None:
-                voting[report.parsed_answer] += 1
+        t0 = time.perf_counter()
+        convo = await conversation(q_text, q_id, client, tokenizer, cfg)
+        elapsed = time.perf_counter() - t0
+        if convo.parsed_answer is not None:
+            voting[convo.parsed_answer] += 1
+        return ConversationReport(
+            **convo.model_dump(),
+            q_id=q_id,
+            gt_answer=gt_answer,
+            elapsed=elapsed,
+        )
     except Exception:
         logger.exception(f"[{q_id}] unexpected worker error")
-    finally:
-        return reports
+    except asyncio.CancelledError:
+        pass
+    return None
 
 
 async def monitor_voting(voting: Counter, min_votes: int) -> None:
@@ -195,7 +204,8 @@ async def monitor_voting(voting: Counter, min_votes: int) -> None:
         if total_votes < min_votes:
             continue
         answer, n_votes = voting.most_common(1)[0]
-        if n_votes > total_votes // 2:
+        # TODO is 50% enough?
+        if n_votes > int(total_votes * 0.5):
             break
 
 
@@ -226,16 +236,18 @@ async def solve_one(
             monitor_voting(voting, cfg.min_votes), timeout=allowed_time
         )
     except asyncio.TimeoutError:
+        # TODO this is the place where we implement "confidence score=mean logprob−std deviation of logprobs"
+        # and just select top k from that
         logger.info(f"[{q_id}] killing workers: timeout")
     else:
         elapsed = time.perf_counter() - t0
+        # TODO is 50% too much?
         logger.info(f"[{q_id}] killing workers: > 50% reached in {elapsed:0.2f} secs")
     # stop all workers and collect all the conversations
     for worker_task in worker_tasks:
         worker_task.cancel()
-    convos_list = await asyncio.gather(*worker_tasks)
+    all_convos = [c for c in await asyncio.gather(*worker_tasks) if c is not None]
     # save to json
-    all_convos = sum(convos_list, [])
     cfg.exp_path.parent.mkdir(parents=True, exist_ok=True)
     if cfg.exp_path.exists():
         with open(cfg.exp_path, "r") as f:
