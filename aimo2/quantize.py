@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 
 from awq import AutoAWQForCausalLM
-from huggingface_hub import upload_folder
+from huggingface_hub import create_repo, upload_folder
 from transformers import AutoTokenizer
 
 
@@ -24,6 +24,7 @@ def main(model_path: str, revision: str):
     print(f"Quantized: {quant_name}")
     # 3. push to hub
     repo_id = f"evanarlian/{quant_name}"
+    create_repo(repo_id, private=False, repo_type="model", exist_ok=True)
     upload_folder(folder_path=quant_name, repo_id=repo_id)
     model.push_to_hub(quant_name)
     print(f"Pushed: {repo_id}")
