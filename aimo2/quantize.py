@@ -26,7 +26,6 @@ def main(model_path: str, revision: str):
     repo_id = f"evanarlian/{quant_name}"
     create_repo(repo_id, private=False, repo_type="model", exist_ok=True)
     upload_folder(folder_path=quant_name, repo_id=repo_id)
-    model.push_to_hub(quant_name)
     print(f"Pushed: {repo_id}")
 
 
