@@ -34,6 +34,13 @@ Interesting findings about vLLM benchmark:
 
 
 # development
+Quantize according to the whitelist rules.
+```bash
+uv run -m aimo2.quantize --model-path=agentica-org/DeepScaleR-1.5B-Preview --revision=24a92eff29154a702a928249812162644208ac5b
+
+uv run -m aimo2.quantize --model-path=open-r1/OpenR1-Qwen-7B --revision=ae96ffba622dede862815c00d64270028a9ee8e4
+```
+
 Run tests
 ```bash
 uv run pytest
