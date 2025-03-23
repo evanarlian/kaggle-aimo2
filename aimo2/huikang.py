@@ -180,24 +180,21 @@ def predict_for_question(
     ]
 
     all_extracted_answers = []
-    for _ in range(1):
-        list_of_messages = batch_message_generate(
-            list_of_messages, max_model_len, cutoff_times, llm, tokenizer
+    list_of_messages = batch_message_generate(
+        list_of_messages, max_model_len, cutoff_times, llm, tokenizer
+    )
+
+    if not os.getenv("KAGGLE_IS_COMPETITION_RERUN"):
+        df = pd.DataFrame(
+            {
+                "question": [question] * len(list_of_messages),
+                "message": [messages[-1]["content"] for messages in list_of_messages],
+            }
         )
+        df.to_csv(f"{str(int(time.time() - start_time)).zfill(5)}.csv", index=False)
 
-        if not os.getenv("KAGGLE_IS_COMPETITION_RERUN"):
-            df = pd.DataFrame(
-                {
-                    "question": [question] * len(list_of_messages),
-                    "message": [
-                        messages[-1]["content"] for messages in list_of_messages
-                    ],
-                }
-            )
-            df.to_csv(f"{str(int(time.time() - start_time)).zfill(5)}.csv", index=False)
-
-        list_of_messages, extracted_answers = batch_message_filter(list_of_messages)
-        all_extracted_answers.extend(extracted_answers)
+    list_of_messages, extracted_answers = batch_message_filter(list_of_messages)
+    all_extracted_answers.extend(extracted_answers)
 
     print("all_extracted_answers", all_extracted_answers)
     answer = select_answer(all_extracted_answers)
@@ -234,7 +231,7 @@ def main():
     tokenizer = llm.get_tokenizer()
 
     Q = "Triangle $ABC$ has side length $AB = 120$ and circumradius $R = 100$. Let $D$ be the foot of the perpendicular from $C$ to the line $AB$. What is the greatest possible length of segment $CD$?"
-    Q = "calculate sin(45) + cos(45)"
+    Q = "calculate 3 ^ 4. Answer inside \\boxed{}"
 
     predict_for_question(
         Q,
