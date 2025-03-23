@@ -9,12 +9,19 @@ uv sync
 ```
 
 Benchmark nginx token/sec. Edit the scripts to change settings.
+Run vllm server.
+TODO clean up usage, too much noise
 ```bash
 ./scripts/start_vllm.sh
 
 uv run -m aimo2.benchmark.openai_nginx --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100
 
 killall nginx vllm
+```
+
+Run submit
+```bash
+uv run -m aimo2.submit
 ```
 
 Benchmark local vllm (with tensor parallel) token/sec.
