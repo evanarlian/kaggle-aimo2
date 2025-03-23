@@ -3,10 +3,14 @@
 ## initial setup
 * seed, not that important
 * cutoff_time is 4.75 hours after the competition starts
-* cutoff_times in the duration from competition ends (4.75 hour mark) until (1 hour mark). You should read from the back (reversed). This is really weird. My intuition:
+* cutoff_times in the duration from competition ends (4.75 hour mark) until (1 hour mark). You should read from the back (reversed).
+* cutoff_times uses np.linspace, that means each new question will have 270 extra seconds (4.5 mins)
+* The timing scheme is really weird. My intuition:
   * the earlier questions will have a very long time bonus
   * 1st question will have 3600 secs of runtime
-  * 2nd question will have (3600 - elapsed so far) secs of runtime
+  * 2nd question will have (3600 + 270 - elapsed so far) secs of runtime
+  * 3rd question will have (3600 + 540 - elapsed so far) secs of runtime
+  * ... and so on
   * This way, earlier questions will not trigger "Speedrun" (explained later). Fully maxed out at MAX_MODEL_LEN=12288 tokens or found EOS token
   * Note that this might explain extreme score fluctuations in LB. Note that LB questions will be served randomly
 
@@ -19,4 +23,8 @@
   * seed, interesting
 * tokenizer is the standard model tokenizer
 
-## inference 
+## inference
+* the gateway of the inference code is predict_for_question
+* selected_questions_only is a flag used to skip the inference, I set it to False to simulate real competition condition
+* if time.time() > cutoff_time is interesting, if current time if more than the global limit (4.75 hours), the predict function will instantly return 210. Idk where did this number come from.
+* 

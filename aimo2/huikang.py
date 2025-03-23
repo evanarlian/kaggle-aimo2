@@ -154,8 +154,8 @@ def predict_for_question(
     llm: LLM,
     tokenizer,
 ) -> int:
-    selected_questions_only = True
-    # selected_questions_only = False
+    # selected_questions_only = True
+    selected_questions_only = False
     if selected_questions_only and not os.getenv("KAGGLE_IS_COMPETITION_RERUN"):
         # if "Triangle" not in question:
         #    return 210
@@ -169,7 +169,7 @@ def predict_for_question(
     if time.time() > cutoff_time:
         return 210
 
-    print(question)
+    print("🧊", question)
 
     num_seqs = max_num_seqs
     if time.time() > cutoff_times[-1]:
@@ -199,9 +199,9 @@ def predict_for_question(
         list_of_messages, extracted_answers = batch_message_filter(list_of_messages)
         all_extracted_answers.extend(extracted_answers)
 
-    print(all_extracted_answers)
+    print("all_extracted_answers", all_extracted_answers)
     answer = select_answer(all_extracted_answers)
-    print(answer)
+    print("answer", answer)
 
     print("\n\n")
     cutoff_times.pop()
@@ -211,7 +211,6 @@ def predict_for_question(
 def main():
     seed_everything(seed=0)
     start_time = time.time()
-    start_time = 0.0
     cutoff_time = start_time + (4 * 60 + 45) * 60
     cutoff_times = [
         int(x) for x in np.linspace(cutoff_time, start_time + 60 * 60, 50 + 1)
@@ -235,6 +234,7 @@ def main():
     tokenizer = llm.get_tokenizer()
 
     Q = "Triangle $ABC$ has side length $AB = 120$ and circumradius $R = 100$. Let $D$ be the foot of the perpendicular from $C$ to the line $AB$. What is the greatest possible length of segment $CD$?"
+    Q = "calculate sin(45) + cos(45)"
 
     predict_for_question(
         Q,
