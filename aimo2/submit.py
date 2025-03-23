@@ -2,13 +2,11 @@ import asyncio
 import json
 import logging
 import os
-import random
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
-import numpy as np
 import polars as pl
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -22,7 +20,6 @@ from aimo2.utils import is_kaggle, wib_now
 
 class Config(BaseModel):
     n_parallel: int
-    min_votes: int
     model: str
     num_questions: int
     hours: int
@@ -30,17 +27,10 @@ class Config(BaseModel):
     source_csv: str
 
 
-class Prompt(BaseModel):
-    system: Optional[str]
-    boxed_enforcer: str
-
-
 class ConversationResult(BaseModel):
     boxed_answer: Optional[str]
     parsed_answer: Optional[int]
     history: list[dict[Literal["role", "content"], str]]
-    mean_logprob: float
-    std_logprob: float
     temperature: float
     top_p: float
     min_p: float
@@ -52,23 +42,6 @@ class ConversationReport(ConversationResult):
     elapsed: float
 
 
-def get_random_prompt() -> Prompt:
-    # TODO i might not need Prompt pydantic obj, just return concise system prompt,
-    # TODO select best system prompt using lambdalabs
-    en_system_prompts = [
-        None,
-        None,
-        "Final answer inside \\boxed{}.",
-        "Be concise, put the final answer in \\boxed{}.",
-        "You are a great mathematician, be confident, put the final answer in \\boxed{}.",
-    ]
-    en_boxed_enforcer = "\n\n**Final Answer:**\n\\[\n\\boxed{"
-    return Prompt(
-        system=random.choice(en_system_prompts),
-        boxed_enforcer=en_boxed_enforcer,
-    )
-
-
 async def conversation(
     q_text: str,
     q_id: str,
@@ -77,28 +50,22 @@ async def conversation(
     cfg: Config,
 ) -> ConversationResult:
     # 0. randomizer
-    prompt = get_random_prompt()
-    temperature = 1.0  # TODO make random later? we need speed tho
+    # TODO make random later? we need speed tho
+    temperature = 1.0
     top_p = 0.9
     min_p = 0.1
     # 1. get answer initial answer
-    history: Any = []
-    if prompt.system is not None:
-        history.append({"role": "system", "content": prompt.system})
+    history = []
     history.append({"role": "user", "content": q_text})
     completion1 = await client.chat.completions.create(
         model=cfg.model,
         messages=history,
-        logprobs=True,
         temperature=temperature,
         top_p=top_p,
         stop=["</think>"],  # don't waste time on repeating what the model knows
         extra_body={"min_p": min_p},
     )
-    assert completion1.choices[0].logprobs is not None
-    assert completion1.choices[0].logprobs.content is not None
     assert completion1.choices[0].message.content is not None
-    logprobs = np.array([lp.logprob for lp in completion1.choices[0].logprobs.content])
     reply1 = completion1.choices[0].message.content
     history.append({"role": "assistant", "content": reply1})
     # 2. force the model to output in the right format if not exist
@@ -108,7 +75,7 @@ async def conversation(
         # try to fix it once
         history[-1]["content"] = (
             history[-1]["content"].replace("</think>", "<think2>")
-            + prompt.boxed_enforcer
+            + "\n\n**Final Answer:**\n\\[\n\\boxed{"
         )
         raw = tokenizer.apply_chat_template(
             history,
@@ -133,8 +100,6 @@ async def conversation(
                 boxed_answer=None,
                 parsed_answer=None,
                 history=history,
-                mean_logprob=logprobs.mean(),
-                std_logprob=logprobs.std(),
                 temperature=temperature,
                 top_p=top_p,
                 min_p=min_p,
@@ -149,8 +114,6 @@ async def conversation(
             boxed_answer=box_content1,
             parsed_answer=None,
             history=history,
-            mean_logprob=logprobs.mean(),
-            std_logprob=logprobs.std(),
             temperature=temperature,
             top_p=top_p,
             min_p=min_p,
@@ -160,8 +123,6 @@ async def conversation(
         boxed_answer=box_content1,
         parsed_answer=predicted_num % 1000,
         history=history,
-        mean_logprob=logprobs.mean(),
-        std_logprob=logprobs.std(),
         temperature=temperature,
         top_p=top_p,
         min_p=min_p,
@@ -176,37 +137,19 @@ async def worker(
     client: AsyncOpenAI,
     tokenizer: PreTrainedTokenizer,
     cfg: Config,
-) -> Optional[ConversationReport]:
-    try:
-        t0 = time.perf_counter()
-        convo = await conversation(q_text, q_id, client, tokenizer, cfg)
-        elapsed = time.perf_counter() - t0
-        if convo.parsed_answer is not None:
-            voting[convo.parsed_answer] += 1
-        return ConversationReport(
-            **convo.model_dump(),
-            q_id=q_id,
-            gt_answer=gt_answer,
-            elapsed=elapsed,
-        )
-    except Exception:
-        logger.exception(f"[{q_id}] unexpected worker error")
-    except asyncio.CancelledError:
-        pass
-    return None
-
-
-async def monitor_voting(voting: Counter, min_votes: int) -> None:
-    assert min_votes > 0
-    while True:
-        await asyncio.sleep(0.1)
-        total_votes = sum(voting.values())
-        if total_votes < min_votes:
-            continue
-        answer, n_votes = voting.most_common(1)[0]
-        # TODO is 50% enough?
-        if n_votes > int(total_votes * 0.5):
-            break
+) -> ConversationReport:
+    t0 = time.perf_counter()
+    convo = await conversation(q_text, q_id, client, tokenizer, cfg)
+    elapsed = time.perf_counter() - t0
+    # TODO add PRM logic here later
+    if convo.parsed_answer is not None:
+        voting[convo.parsed_answer] += 1
+    return ConversationReport(
+        **convo.model_dump(),
+        q_id=q_id,
+        gt_answer=gt_answer,
+        elapsed=elapsed,
+    )
 
 
 async def solve_one(
@@ -220,7 +163,6 @@ async def solve_one(
 ) -> int:
     """Manages workers (parallel calls to vllm)"""
     allowed_time = timer.start_question()
-    t0 = time.perf_counter()
     logger.info(f"[{q_id}] allowed time: {allowed_time}")
     voting = Counter()
     logger.info(f"[{q_id}] creating {cfg.n_parallel} workers")
@@ -230,23 +172,17 @@ async def solve_one(
         )
         for _ in range(cfg.n_parallel)
     ]
-    # waits for either timeout or monitor voting finishes first
-    try:
-        await asyncio.wait_for(
-            monitor_voting(voting, cfg.min_votes), timeout=allowed_time
-        )
-    except asyncio.TimeoutError:
-        # TODO this is the place where we implement "confidence score=mean logprob−std deviation of logprobs"
-        # and just select top k from that
-        logger.info(f"[{q_id}] killing workers: timeout")
-    else:
-        elapsed = time.perf_counter() - t0
-        # TODO is 50% too much?
-        logger.info(f"[{q_id}] killing workers: > 50% reached in {elapsed:0.2f} secs")
-    # stop all workers and collect all the conversations
-    for worker_task in worker_tasks:
-        worker_task.cancel()
-    all_convos = [c for c in await asyncio.gather(*worker_tasks) if c is not None]
+    done, pending = await asyncio.wait(worker_tasks, timeout=allowed_time)
+    # throw away pendings
+    for p in pending:
+        p.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    # collect successful worker
+    convo_reports = [
+        d
+        for d in await asyncio.gather(*done, return_exceptions=True)
+        if isinstance(d, ConversationReport)
+    ]
     # save to json
     cfg.exp_path.parent.mkdir(parents=True, exist_ok=True)
     if cfg.exp_path.exists():
@@ -254,7 +190,7 @@ async def solve_one(
             existing = json.load(f)
     else:
         existing = []
-    existing += [c.model_dump() for c in all_convos]
+    existing += [c.model_dump() for c in convo_reports]
     with open(cfg.exp_path, "w") as f:
         json.dump(existing, f, indent=4)
     logger.info(f"[{q_id}] convos added to {cfg.exp_path}")
@@ -271,9 +207,11 @@ async def solve_one(
 ########################################################################################
 
 if is_kaggle():
+    # TODO test time scaling is not only majority voting, there are: best of N (PRM based), beam search, dvts, etc
+    # TODO increase n_parallel since we have used temp for speed demon
+    # TODO do benchmark first just by counting the available json rows
     cfg = Config(
         n_parallel=32,
-        min_votes=15,
         model="/kaggle/input/deepseek-r1/transformers/deepseek-r1-distill-qwen-7b-awq-casperhansen/1",
         num_questions=50,
         hours=5,
@@ -283,7 +221,6 @@ if is_kaggle():
 else:
     cfg = Config(
         n_parallel=32,
-        min_votes=15,
         model="casperhansen/deepseek-r1-distill-qwen-1.5b-awq",
         num_questions=3,
         hours=1,
