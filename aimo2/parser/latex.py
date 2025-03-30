@@ -57,6 +57,7 @@ class MyLatexParser:
         p = Process(target=self._latex_to_int_modded, args=(latex_str, q))
         p.start()
         p.join(timeout=self.timeout)
+        p.terminate()  # force kill
         proc_result = q.get() if not q.empty() else None
         return proc_result
 

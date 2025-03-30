@@ -47,3 +47,7 @@ def test_failures(parser: MyLatexParser):
     assert parser.latex_to_int_modded("\\sqrt{-1}") is None  # Complex
     assert parser.latex_to_int_modded("\\text{hi}") is None  # Non-math
     assert parser.latex_to_int_modded("") is None  # Empty
+
+
+def test_slow_operations(parser: MyLatexParser):
+    assert parser.latex_to_int_modded("4046 \\cdot (4045)!!") == 250
