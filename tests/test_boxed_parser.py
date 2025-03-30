@@ -1,4 +1,4 @@
-from aimo2.parser import extract_boxed_text
+from aimo2.parser.latex import extract_boxed_text
 
 
 def test_simple_content():

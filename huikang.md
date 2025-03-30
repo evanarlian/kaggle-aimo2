@@ -1,4 +1,5 @@
 # huikang code flow
+Reference: https://www.kaggle.com/code/huikang/deepseek-r1-distill-qwen-7b-awq
 
 ## initial setup
 * seed, not that important
@@ -50,4 +51,6 @@
   * if the counter is empty (either by no answer or failed int parsing), return 210 magic number
 
 # recap
-* the most interesting thing is the timing, earlier questions are given more time, but the later will be speedrunning due to less time.
+the most interesting things from the solution:
+* timing, earlier questions are given more time, but the later will be speedrunning due to less time.
+* prompt, mod 1000 are being performed from the model itself

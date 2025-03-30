@@ -55,7 +55,7 @@ uv run pytest
 
 
 # TODO
-* try qwen PRM model (must be AWQ)
+* try qwen PRM model (non AWQ)
 * try deepscaler1.5B (must be AWQ)
 * try open R1 (must be AWQ)
 * test-time scaling tricks:
