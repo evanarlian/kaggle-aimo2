@@ -8,9 +8,15 @@ Install deps
 uv sync
 ```
 
+Run majority voting
+```bash
+./scripts/start_vllm_maj.sh
+
+uv run -m aimo2.maj
+```
+
+# development
 Benchmark nginx token/sec. Edit the scripts to change settings.
-Run vllm server.
-TODO clean up usage, too much noise
 ```bash
 ./scripts/start_vllm.sh
 
@@ -18,12 +24,6 @@ uv run -m aimo2.benchmark.openai_nginx --model=casperhansen/deepseek-r1-distill-
 
 killall nginx vllm
 ```
-
-Run submit
-```bash
-uv run -m aimo2.submit
-```
-
 Benchmark local vllm (with tensor parallel) token/sec.
 ```bash
 uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --concurrent=100 --tp=1
@@ -31,7 +31,6 @@ uv run -m aimo2.benchmark.local_vllm_tp --model=casperhansen/deepseek-r1-distill
 
 Benchmark at which batch size vLLM starts showing diminishing return of tok/sec. Note that this only measures single GPU (single vLLM server) for easier interpretation.
 ```bash
-# TODO update on kaggle, fine grained search on 16 - 128 bs
 uv run -m aimo2.benchmark.batch_saturation --model=casperhansen/deepseek-r1-distill-qwen-1.5b-awq --batch-sizes 1 2 4 8 16 32 64 128 --timeout=60
 ```
 
@@ -39,8 +38,6 @@ Interesting findings about vLLM benchmark:
 * Setting temperature other than 1.0 will degrade perf, about 90% the original tok/s (RTX 3060)
 * Setting top_p other than 1.0 will degrade perf, about 66% the original tok/s (RTX 3060)
 
-
-# development
 Quantize according to the whitelist rules.
 ```bash
 uv run -m aimo2.quantize --model-path=agentica-org/DeepScaleR-1.5B-Preview --revision=24a92eff29154a702a928249812162644208ac5b
@@ -55,6 +52,8 @@ uv run pytest
 
 
 # TODO
+*  MODEL=evanarlian/DeepScaleR-1.5B-Preview-AWQ
+* change vllm scripts to handle mutiple model later: prm, 3 llm
 * test time scaling is not only majority voting (implemented!), there are: best of N (PRM based), beam search, dvts, etc
 * increase n_parallel since we have used temp for speed demon
 * do benchmark first just by counting the available json rows

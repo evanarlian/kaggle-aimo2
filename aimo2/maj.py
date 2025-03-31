@@ -3,6 +3,7 @@ import json
 import os
 import time
 from collections import Counter
+from itertools import islice
 from pathlib import Path
 from typing import Optional
 
@@ -185,26 +186,18 @@ async def solve_one(
     voting = Counter()
     print(f"[{q_id}] creating {cfg.n_parallel} workers")
     worker_tasks = [
-        asyncio.create_task(
-            worker(q_text, q_id, gt_answer, voting, client, tokenizer, parser, cfg)
-        )
+        worker(q_text, q_id, gt_answer, voting, client, tokenizer, parser, cfg)
         for _ in range(cfg.n_parallel)
     ]
-    # TODO if i want to stop early i can use as_completed instead for top 75% logic
-    done, pending = await asyncio.wait(worker_tasks, timeout=allowed_time)
-    # print(len(done), len(pending))
-    # throw away pendings
-    for p in pending:
-        p.cancel()
-    await asyncio.gather(*pending, return_exceptions=True)
-    # collect successful worker
+    # only grab the fastest ones, but still under time limit
     convo_reports = []
-    for d in done:
+    for done in islice(
+        asyncio.as_completed(worker_tasks, timeout=allowed_time), cfg.n_first
+    ):
         try:
-            convo_report = await d
-            convo_reports.append(convo_report)
+            convo_reports.append(await done)
         except Exception as e:
-            print(e)
+            print(f"[{q_id}] timeout or raises: {e}")
     # save to json
     cfg.exp_path.parent.mkdir(parents=True, exist_ok=True)
     if cfg.exp_path.exists():
@@ -233,7 +226,7 @@ if is_kaggle():
         n_parallel=32,
         n_first=24,
         model="/kaggle/input/deepseek-r1/transformers/deepseek-r1-distill-qwen-7b-awq-casperhansen/1",
-        grammar_dir=Path("TODO"),
+        grammar_dir=Path("parser"),
         num_questions=50,
         hours=5,
         exp_path=Path("experiments") / f"exp_{wib_now()}.json",
@@ -241,14 +234,14 @@ if is_kaggle():
     )
 else:
     cfg = Config(
-        n_parallel=5,
-        n_first=3,
+        n_parallel=16,
+        n_first=10,
         model="casperhansen/deepseek-r1-distill-qwen-1.5b-awq",
         grammar_dir=Path("aimo2/parser"),
-        num_questions=1,
-        hours=1 / 10,
+        num_questions=3,
+        hours=0.3,
         exp_path=Path("experiments") / f"exp_{wib_now()}.json",
-        source_csv="data/reference2.csv",
+        source_csv="data/test.csv",
     )
 timer = Timer(
     n_questions=cfg.num_questions,
