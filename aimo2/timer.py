@@ -3,8 +3,6 @@ import time
 
 class Timer:
     def __init__(self, n_questions: int, time_limit: float):
-        # TODO implement variable timing for hard tasks during early encounter
-        # TODO look at other people timing code
         self.n_questions = n_questions
         self.time_limit = time_limit
         self.t0 = time.perf_counter()
