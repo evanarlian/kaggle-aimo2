@@ -55,6 +55,9 @@ uv run pytest
 
 
 # TODO
+* test time scaling is not only majority voting (implemented!), there are: best of N (PRM based), beam search, dvts, etc
+* increase n_parallel since we have used temp for speed demon
+* do benchmark first just by counting the available json rows
 * try qwen PRM model (non AWQ)
 * try deepscaler1.5B (must be AWQ)
 * try open R1 (must be AWQ)
