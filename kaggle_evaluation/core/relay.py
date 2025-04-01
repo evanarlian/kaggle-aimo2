@@ -12,7 +12,7 @@ import socket
 import time
 
 from concurrent import futures
-from typing import Callable, List, Tuple
+from typing import Callable, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,10 @@ import pyarrow
 
 import kaggle_evaluation.core.generated.kaggle_evaluation_pb2 as kaggle_evaluation_proto
 import kaggle_evaluation.core.generated.kaggle_evaluation_pb2_grpc as kaggle_evaluation_grpc
+
+
+class GRPCDeadlineError(Exception):
+    pass
 
 
 _SERVICE_CONFIG = {
@@ -39,7 +43,10 @@ _SERVICE_CONFIG = {
         }
     ]
 }
-_GRPC_PORT = 50051
+
+# Include potential fallback ports
+GRPC_PORTS = [50051] + [i for i in range(60053, 60053+10)]
+
 _GRPC_CHANNEL_OPTIONS = [
     # -1 for unlimited message send/receive size
     # https://github.com/grpc/grpc/blob/v1.64.x/include/grpc/impl/channel_arg_names.h#L39
@@ -56,7 +63,7 @@ _GRPC_CHANNEL_OPTIONS = [
 
 
 DEFAULT_DEADLINE_SECONDS = 60 * 60
-_RETRY_SLEEP_SECONDS = 1
+_RETRY_SLEEP_SECONDS = 1 / len(GRPC_PORTS)
 # Enforce a relatively strict server startup time so users can get feedback quickly if they're not
 # configuring KaggleEvaluation correctly. We really don't want notebooks timing out after nine hours
 # somebody forgot to start their inference_server. Slow steps like loading models
@@ -68,6 +75,21 @@ STARTUP_LIMIT_SECONDS = 60 * 15
 # pl.Enum is currently unstable, but we should eventually consider supporting it.
 # https://docs.pola.rs/api/python/stable/reference/api/polars.datatypes.Enum.html#polars.datatypes.Enum
 _POLARS_TYPE_DENYLIST = set([pl.Enum, pl.Object, pl.Unknown])
+
+
+def _get_available_port() -> int:
+    ''' Identify the first available port out of all GRPC_PORTS
+    '''
+    for port in GRPC_PORTS:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('localhost', port))
+            except Exception:
+                continue
+        return port
+
+    raise ValueError(f'None of the expected ports {GRPC_PORTS} are available.')
+
 
 def _serialize(data) -> kaggle_evaluation_proto.Payload:
     '''Maps input data of one of several allow-listed types to a protobuf message to be sent over gRPC.
@@ -217,10 +239,10 @@ class Client():
     '''
     def __init__(self, channel_address: str='localhost'):
         self.channel_address = channel_address
-        self.channel = grpc.insecure_channel(f'{channel_address}:{_GRPC_PORT}', options=_GRPC_CHANNEL_OPTIONS)
+        self.channel = None
         self._made_first_connection = False
         self.endpoint_deadline_seconds = DEFAULT_DEADLINE_SECONDS
-        self.stub = kaggle_evaluation_grpc.KaggleEvaluationServiceStub(self.channel)
+        self.stub = None
 
     def _send_with_deadline(self, request):
         ''' Sends a message to the server while also:
@@ -228,26 +250,49 @@ class Client():
         - Setting a deadline of STARTUP_LIMIT_SECONDS for the inference_server to startup.
         '''
         if self._made_first_connection:
-            return self.stub.Send(request, wait_for_ready=False, timeout=self.endpoint_deadline_seconds)
+            try:
+                return self.stub.Send(request, wait_for_ready=False, timeout=self.endpoint_deadline_seconds)
+            except grpc._channel._InactiveRpcError as err:
+                if 'StatusCode.DEADLINE_EXCEEDED' in str(err):
+                    raise GRPCDeadlineError()
+                else:
+                    raise err
+            except Exception as err:
+                raise err
 
         first_call_time = time.time()
         # Allow time for the server to start as long as its container is running
         while time.time() - first_call_time < STARTUP_LIMIT_SECONDS:
-            try:
-                response = self.stub.Send(request, wait_for_ready=False)
-                self._made_first_connection = True
-                break
-            except grpc._channel._InactiveRpcError as err:
-                if 'StatusCode.UNAVAILABLE' not in str(err):
-                    raise err
-            # Confirm the inference_server container is still alive & it's worth waiting on the server.
-            # If the inference_server container is no longer running this will throw a socket.gaierror.
-            socket.gethostbyname(self.channel_address)
-            time.sleep(_RETRY_SLEEP_SECONDS)
+            for port in GRPC_PORTS:
+                self.channel = grpc.insecure_channel(f'{self.channel_address}:{port}', options=_GRPC_CHANNEL_OPTIONS)
+                self.stub = kaggle_evaluation_grpc.KaggleEvaluationServiceStub(self.channel)
+                try:
+                    response = self.stub.Send(request, wait_for_ready=False)
+                    self._made_first_connection = True
+                    return response
+                except grpc._channel._InactiveRpcError as err:
+                    if 'StatusCode.UNAVAILABLE' not in str(err):
+                        raise err
+                # Confirm the inference_server container is still alive & it's worth waiting on the server.
+                # If the inference_server container is no longer running this will throw a socket.gaierror.
+                socket.gethostbyname(self.channel_address)
+                time.sleep(_RETRY_SLEEP_SECONDS)
 
         if not self._made_first_connection:
             raise RuntimeError(f'Failed to connect to server after waiting {STARTUP_LIMIT_SECONDS} seconds')
-        return response
+
+    def serialize_request(self, name: str, *args, **kwargs) -> kaggle_evaluation_proto.KaggleEvaluationRequest:
+        ''' Serialize a single request. Exists as a separate function from `send`
+        to enable gateway concurrency for some competitions.
+        '''
+        already_serialized = (len(args) == 1) and isinstance(args[0], kaggle_evaluation_proto.KaggleEvaluationRequest)
+        if already_serialized:
+            return args[0]  # args is a tuple of length 1 containing the request
+        return kaggle_evaluation_proto.KaggleEvaluationRequest(
+                name=name,
+                args=map(_serialize, args),
+                kwargs={key: _serialize(value) for key, value in kwargs.items()}
+        )
 
     def send(self, name: str, *args, **kwargs):
         '''Sends a single KaggleEvaluation request.
@@ -260,13 +305,8 @@ class Client():
         Returns:
             The response, which is of one of several allow-listed data types.
         '''
-        request = kaggle_evaluation_proto.KaggleEvaluationRequest(
-                name=name,
-                args=map(_serialize, args),
-                kwargs={key: _serialize(value) for key, value in kwargs.items()}
-        )
+        request = self.serialize_request(name, *args, **kwargs)
         response = self._send_with_deadline(request)
-
         return _deserialize(response.payload)
 
     def close(self):
@@ -280,7 +320,7 @@ class KaggleEvaluationServiceServicer(kaggle_evaluation_grpc.KaggleEvaluationSer
     Class which allows serving responses to KaggleEvaluation requests. The inference_server will run this service to listen for and respond
     to requests from the Gateway. The Gateway may also listen for requests from the inference_server in some cases.
     '''
-    def __init__(self, listeners: List[callable]):
+    def __init__(self, listeners: Tuple[callable]):
         self.listeners_map = dict((func.__name__, func) for func in listeners)
 
     # pylint: disable=unused-argument
@@ -307,7 +347,8 @@ class KaggleEvaluationServiceServicer(kaggle_evaluation_grpc.KaggleEvaluationSer
         response_payload = _serialize(response_function(*args, **kwargs))
         return kaggle_evaluation_proto.KaggleEvaluationResponse(payload=response_payload)
 
-def define_server(*endpoint_listeners: Tuple[Callable]) -> grpc.server:
+
+def define_server(*endpoint_listeners: Callable) -> grpc.server:
     '''Registers the endpoints that the container is able to respond to, then starts a server which listens for
     those endpoints. The endpoints that need to be implemented will depend on the specific competition.
 
@@ -331,5 +372,6 @@ def define_server(*endpoint_listeners: Tuple[Callable]) -> grpc.server:
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1), options=_GRPC_CHANNEL_OPTIONS)
     kaggle_evaluation_grpc.add_KaggleEvaluationServiceServicer_to_server(KaggleEvaluationServiceServicer(endpoint_listeners), server)
-    server.add_insecure_port(f'[::]:{_GRPC_PORT}')
+    grpc_port = _get_available_port()
+    server.add_insecure_port(f'[::]:{grpc_port}')
     return server

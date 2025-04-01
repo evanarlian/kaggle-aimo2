@@ -7,10 +7,11 @@ import sys
 import traceback
 import warnings
 
-from typing import Callable, Generator, Tuple
+from typing import Callable, Generator, Optional, Tuple
 
 import kaggle_evaluation.core.base_gateway
 import kaggle_evaluation.core.relay
+
 
 _initial_import_time = time.time()
 _issued_startup_time_warning = False
@@ -42,30 +43,33 @@ class Gateway(kaggle_evaluation.core.base_gateway.BaseGateway, abc.ABC):
         ''' Used by the default implementation of `get_all_predictions` so we can
         ensure `validate_prediction_batch` is run every time `predict` is called.
 
-        This method must yield both the batch of data to be sent to `predict` and the validation
-        data sent to `validate_prediction_batch`.
+        This method must yield both the batch of data to be sent to `predict` and a series
+        of row IDs to be sent to `validate_prediction_batch`.
         '''
         raise NotImplementedError
 
     def get_all_predictions(self):
         all_predictions = []
-        for data_batch, validation_batch in self.generate_data_batches():
+        all_row_ids = []
+        for data_batch, row_ids in self.generate_data_batches():
             predictions = self.predict(*data_batch)
-            self.validate_prediction_batch(predictions, validation_batch)
+            self.validate_prediction_batch(predictions, row_ids)
             all_predictions.append(predictions)
-        return all_predictions
+            all_row_ids.append(row_ids)
+        return all_predictions, all_row_ids
 
     def predict(self, *args, **kwargs):
         ''' self.predict will send all data in args and kwargs to the user container, and
         instruct the user container to generate a `predict` response.
-
         '''
         try:
             return self.client.send('predict', *args, **kwargs)
         except Exception as e:
             self.handle_server_error(e, 'predict')
 
-    def set_response_timeout_seconds(self, timeout_seconds: float=6_000):
+    def set_response_timeout_seconds(self, timeout_seconds: float):
+        # Also store timeout_seconds in an easy place for for competitor to access.
+        self.timeout_seconds = timeout_seconds
         # Set a response deadline that will apply after the very first repsonse
         self.client.endpoint_deadline_seconds = timeout_seconds
 
@@ -73,8 +77,8 @@ class Gateway(kaggle_evaluation.core.base_gateway.BaseGateway, abc.ABC):
         error = None
         try:
             self.unpack_data_paths()
-            predictions = self.get_all_predictions()
-            self.write_submission(predictions)
+            predictions, row_ids = self.get_all_predictions()
+            self.write_submission(predictions, row_ids)
         except kaggle_evaluation.core.base_gateway.GatewayRuntimeError as gre:
             error = gre
         except Exception:
@@ -104,8 +108,8 @@ class InferenceServer(abc.ABC):
     only need to implement a `predict` function or other endpoints to pass to this class's constructor, and hosts will
     provide a mock Gateway for testing.
     '''
-    def __init__(self, endpoint_listeners: Tuple[Callable]):
-        self.server = kaggle_evaluation.core.relay.define_server(endpoint_listeners)
+    def __init__(self, *endpoint_listeners: Callable):
+        self.server = kaggle_evaluation.core.relay.define_server(*endpoint_listeners)
         self.client = None  # The inference_server can have a client but it isn't typically necessary.
         self._issued_startup_time_warning = False
         self._startup_limit_seconds = kaggle_evaluation.core.relay.STARTUP_LIMIT_SECONDS
@@ -116,12 +120,13 @@ class InferenceServer(abc.ABC):
             self.server.wait_for_termination()  # This will block all other code
 
     @abc.abstractmethod
-    def _get_gateway_for_test(self, data_paths):
-        # TODO: This should return a version of the competition-specific gateway that's able to load
-        # data used for unit tests.
+    def _get_gateway_for_test(self, data_paths, file_share_dir=None, *args, **kwargs):
+        # Must return a version of the competition-specific gateway able to load data for unit tests.
         raise NotImplementedError
 
-    def run_local_gateway(self, data_paths=None):
+    def run_local_gateway(self, data_paths:Optional[Tuple[str]]=None, file_share_dir:str=None, *args, **kwargs):
+        ''' Construct a copy of the gateway that uses local file paths.
+        '''
         global _issued_startup_time_warning
         script_elapsed_seconds = time.time() - _initial_import_time
         if script_elapsed_seconds > self._startup_limit_seconds and not _issued_startup_time_warning:
@@ -135,7 +140,7 @@ class InferenceServer(abc.ABC):
 
         self.server.start()
         try:
-            self.gateway = self._get_gateway_for_test(data_paths)
+            self.gateway = self._get_gateway_for_test(data_paths, file_share_dir, *args, **kwargs)
             self.gateway.run()
         except Exception as err:
             raise err from None

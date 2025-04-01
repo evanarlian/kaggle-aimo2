@@ -229,7 +229,7 @@ if is_kaggle():
         grammar_dir=Path("parser"),
         num_questions=50,
         hours=5,
-        exp_path=Path("experiments") / f"exp_{wib_now()}.json",
+        exp_path=Path("experiments") / f"exp_maj_{wib_now()}.json",
         source_csv="/kaggle/input/ai-mathematical-olympiad-progress-prize-2/test.csv",
     )
 else:
@@ -240,7 +240,7 @@ else:
         grammar_dir=Path("aimo2/parser"),
         num_questions=3,
         hours=0.3,
-        exp_path=Path("experiments") / f"exp_{wib_now()}.json",
+        exp_path=Path("experiments") / f"exp_maj_{wib_now()}.json",
         source_csv="data/test.csv",
     )
 timer = Timer(

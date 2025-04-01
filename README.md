@@ -8,11 +8,23 @@ Install deps
 uv sync
 ```
 
-Run majority voting
+Download competition dataset, this will also update the `kaggle_evaluation` dir with new code
+```bash
+./scripts/download_data.sh
+```
+
+Run majority voting based solution
 ```bash
 ./scripts/start_vllm_maj.sh
 
 uv run -m aimo2.maj
+```
+
+Run reward model based solution
+```bash
+./scripts/start_vllm_bon.sh
+
+uv run -m aimo2.bon
 ```
 
 # development
@@ -54,18 +66,10 @@ uv run pytest
 # TODO
 *  MODEL=evanarlian/DeepScaleR-1.5B-Preview-AWQ
 * change vllm scripts to handle mutiple model later: prm, 3 llm
-* test time scaling is not only majority voting (implemented!), there are: best of N (PRM based), beam search, dvts, etc
+* test time scaling that might work: BoN, we2ighted BoN, new microsoft paper
 * increase n_parallel since we have used temp for speed demon
-* do benchmark first just by counting the available json rows
-* try qwen PRM model (non AWQ)
-* try deepscaler1.5B (must be AWQ)
-* try open R1 (must be AWQ)
 * test-time scaling tricks:
-  * majority voting (easiest)
-  * best of N (select the best answer according to PRM)
-  * beam search
-  * DVTS
-  * entropix
+
 * reward model
   * standard PRM (Qwen PRM 7B is good)
   * entropy score (almost free to use)
@@ -78,16 +82,11 @@ uv run pytest
     * use good evals
     * play with timings (TimeManager class)
     * dual gpu inference using threadpool
-* interesting observation: wrong answers have longer CoTs. https://x.com/AlexGDimakis/status/1885447830120362099. Replicate this and try to exploit this as well
-* validation: use aime, math500, amc for validation. numina blogpost has these dataset ready to use for validation, but qwen math might be trained on them so i dunno, need to check. Use wandb for storing result.
 
 
 # vllm tune (do this on real kaggle submit kernel after modifying prompt forcing)
 * preempt issues on check, see https://docs.vllm.ai/en/latest/performance/optimization.html.
 * check vllm logs in kaggle to document mem used for gpu, for peak, for kv cache. Make sure the kv cache data type and use https://lmcache.ai/kv_cache_calculator.html to calculate.
-* prompt forcing should add missing </ think> token if needed, check result first
-* timer should allow one last time of giving answer, dont kill too early before prompt forcing
-* maybe timer should be placed on worker instead
 
 
 # vast ai todo
@@ -102,9 +101,16 @@ uv run pytest
 
 
 # notes
+* this competition is all about inference time scaling:
+  * majority-voting / self concistency (SC): easiest to do
+  * best of N (BoN) (select the best answer according to reward/critic model): require good reward model, consumes 1 gpu slot
+  * beam search
+  * diverse tree verifier search (DVTS)
 * awq is much faster than unsloth dynamic quants (bnb). On my machine, r1 1.5b, bs 16: awq (1423 tok/s) while bnb (399 tok/s). Need further investigation.
 * [math-verify](https://github.com/huggingface/Math-Verify) by huggingface for parsing math, but fails on this latex -> `\\left\\lfloor 100 \\sqrt{2} \\right\\rfloor`. Answer should be 141.
 * found out that using english prompt is better than using both english and chinese prompt (22 vs 17 score respectively). I removed the chinese prompt
 * make sure vllm's `--max-seq-len-to-capture` covers your token range. Helps a little bit since the model does not fallback to eager execution. TODO try on kaggle's gpu
-* stop at </ think>, this is because the llm sometimes tried to make the answer presentable to the user, which can be long
-* use temp 1.0 (default) because it will speed up a lot
+* stop at </ think>, this is because the llm sometimes tried to make the answer presentable to the user, which can be long.
+* use temp 1.0 (default) because it will speed up a lot, need to check if the speed up worth not using lower temp.
+* deepseek r1 series offical recommendation: https://github.com/deepseek-ai/DeepSeek-R1?tab=readme-ov-file#usage-recommendations
+* Qwen math PRM is not useful for steps inside deepseek's think token, there are no meaningful differences between wrong score and correct score, everything will be scored high.

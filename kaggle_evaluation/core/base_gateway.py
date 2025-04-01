@@ -10,21 +10,26 @@ import re
 import subprocess
 
 from socket import gaierror
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import grpc
+import numpy as np
 import pandas as pd
 import polars as pl
 
 import kaggle_evaluation.core.relay
 
 
+# Files in this directory are visible to the competitor container.
 _FILE_SHARE_DIR = '/kaggle/shared/'
 IS_RERUN = os.getenv('KAGGLE_IS_COMPETITION_RERUN') is not None
 
 
 class GatewayRuntimeErrorType(enum.Enum):
-    ''' Allow-listed error types that Gateways can raise, which map to canned error messages to show users.'''
+    ''' Allow-listed error types that Gateways can raise, which map to canned error messages to show users.
+    Please try capture all errors with one of these types.
+    Unhandled errors are treated as caused by Kaggle and do not count towards daily submission limits.
+    '''
     UNSPECIFIED = 0
     SERVER_NEVER_STARTED = 1
     SERVER_CONNECTION_FAILED = 2
@@ -33,6 +38,7 @@ class GatewayRuntimeErrorType(enum.Enum):
     # Default error type if an exception was raised that was not explicitly handled by the Gateway
     GATEWAY_RAISED_EXCEPTION = 5
     INVALID_SUBMISSION = 6
+    GRPC_DEADLINE_EXCEEDED = 7
 
 
 class GatewayRuntimeError(Exception):
@@ -43,39 +49,60 @@ class GatewayRuntimeError(Exception):
 
 
 class BaseGateway():
-    def __init__(self, data_paths: Tuple[str]=None, file_share_dir: str=_FILE_SHARE_DIR):
+    def __init__(self,
+            data_paths: Tuple[str]=None,
+            file_share_dir: Optional[str]=_FILE_SHARE_DIR,
+            target_column_name: Optional[str]=None
+        ):
         self.client = kaggle_evaluation.core.relay.Client('inference_server' if IS_RERUN else 'localhost')
         self.server = None  # The gateway can have a server but it isn't typically necessary.
-        self.file_share_dir = file_share_dir
+        # Off Kaggle, we can accept a user input file_share_dir. On Kaggle, we need to use the special directory
+        # that is visible to the user.
+        if file_share_dir or not os.path.exists('/kaggle'):
+            self.file_share_dir = file_share_dir
+        else:
+            self.file_share_dir = _FILE_SHARE_DIR
+
+        self._shared_a_file = False
         self.data_paths = data_paths
+        self.target_column_name = target_column_name  # Only used if the predictions are made as a primitive type (int, bool, etc) rather than a dataframe.
 
     def validate_prediction_batch(
-        self,
-        prediction_batch: Union[pd.DataFrame, pl.DataFrame],
-        sample_submission_batch: Union[pd.DataFrame, pl.DataFrame]):
+            self,
+            prediction_batch: Any,
+            row_ids: Union[pl.DataFrame, pl.Series, pd.DataFrame, pd.Series]
+        ):
         ''' If competitors can submit fewer rows than expected they can save all predictions for the last batch and
         bypass the benefits of the Kaggle evaluation service. This attack was seen in a real competition with the older time series API:
         https://www.kaggle.com/competitions/riiid-test-answer-prediction/discussion/196066
         It's critically important that this check be run every time predict() is called.
+
+        If your predictions may take a variable number of rows and you need to write a custom version of this check,
+        you still must specify a minimum row count greater than zero per prediction batch.
         '''
         if prediction_batch is None:
             raise GatewayRuntimeError(GatewayRuntimeErrorType.INVALID_SUBMISSION, 'No prediction received')
-        if len(prediction_batch) != len(sample_submission_batch):
+        num_received_rows = None
+        # Special handling for numpy ints only as numpy floats are python floats, but numpy ints aren't python ints
+        for primitive_type in [int, float, str, bool, np.int_]:
+            if isinstance(prediction_batch, primitive_type):
+                # Types that only support one predictions per batch don't need to be validated.
+                # Basic types are valid for prediction, but either don't have a length (int) or the length isn't relevant for
+                # purposes of this check (str).
+                num_received_rows = 1
+        if num_received_rows is None:
+            if type(prediction_batch) not in [pl.DataFrame, pl.Series, pd.DataFrame, pd.Series]:
+                raise GatewayRuntimeError(GatewayRuntimeErrorType.INVALID_SUBMISSION, f'Invalid prediction data type, received: {type(prediction_batch)}')
+            num_received_rows = len(prediction_batch)
+        if type(row_ids) not in [pl.DataFrame, pl.Series, pd.DataFrame, pd.Series]:
+            raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, f'Invalid row ID type {type(row_ids)}; expected Polars DataFrame or similar')
+        num_expected_rows = len(row_ids)
+        if len(row_ids) == 0:
+            raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, 'Missing row IDs for batch')
+        if num_received_rows != num_expected_rows:
             raise GatewayRuntimeError(
                 GatewayRuntimeErrorType.INVALID_SUBMISSION,
-                f'Invalid predictions: expected {len(sample_submission_batch)} rows but received {len(prediction_batch)}'
-            )
-
-        ROW_ID_COLUMN_INDEX = 0
-        row_id_colname = sample_submission_batch.columns[ROW_ID_COLUMN_INDEX]
-        # Prevent frame shift attacks that could be performed if the IDs are predictable.
-        # Ensure both dataframes are in Polars for efficient comparison.
-        if row_id_colname not in prediction_batch.columns:
-            raise GatewayRuntimeError(GatewayRuntimeErrorType.INVALID_SUBMISSION, f'Prediction missing column {row_id_colname}')
-        if not pl.Series(prediction_batch[row_id_colname]).equals(pl.Series(sample_submission_batch[row_id_colname])):
-            raise GatewayRuntimeError(
-                GatewayRuntimeErrorType.INVALID_SUBMISSION,
-                f'Invalid values for {row_id_colname} in batch of predictions.'
+                f'Invalid predictions: expected {num_expected_rows} rows but received {num_received_rows}'
             )
 
     def _standardize_and_validate_paths(
@@ -83,30 +110,48 @@ class BaseGateway():
             input_paths: List[Union[str, pathlib.Path]]
         ) -> List[pathlib.Path]:
         # Accept a list of str or pathlib.Path, but standardize on list of str
+        if input_paths and not self.file_share_dir or type(self.file_share_dir) not in (str, pathlib.Path):
+            raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, f'Invalid `file_share_dir`: {self.file_share_dir}')
+
         for path in input_paths:
             if os.pardir in str(path):
-                raise ValueError(f'Send files path contains {os.pardir}: {path}')
+                raise GatewayRuntimeError(
+                    GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                    f'Send files path contains {os.pardir}: {path}'
+                )
             if str(path) != str(os.path.normpath(path)):
                 # Raise an error rather than sending users unexpectedly altered paths
-                raise ValueError(f'Send files path {path} must be normalized. See `os.path.normpath`')
+                raise GatewayRuntimeError(
+                    GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                    f'Send files path {path} must be normalized. See `os.path.normpath`'
+                )
             if type(path) not in (pathlib.Path, str):
-                raise ValueError('All paths must be of type str or pathlib.Path')
+                raise GatewayRuntimeError(
+                    GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                    'All paths must be of type str or pathlib.Path'
+                )
             if not os.path.exists(path):
-                raise ValueError(f'Input path {path} does not exist')
+                raise GatewayRuntimeError(
+                    GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                    f'Input path {path} does not exist'
+                )
 
         input_paths = [os.path.abspath(path) for path in input_paths]
         if len(set(input_paths)) != len(input_paths):
-            raise ValueError('Duplicate input paths found')
+            raise GatewayRuntimeError(
+                GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                'Duplicate input paths found'
+            )
 
-        if not self.file_share_dir.endswith(os.path.sep):
+        output_dir = self.file_share_dir
+        if not output_dir.endswith(os.path.sep):
             # Ensure output dir is valid for later use
-            output_dir = self.file_share_dir + os.path.sep
+            output_dir += os.path.sep
 
-        if not os.path.exists(self.file_share_dir) or not os.path.isdir(self.file_share_dir):
-            raise ValueError(f'Invalid output directory {self.file_share_dir}')
         # Can't use os.path.join for output_dir + path: os.path.join won't prepend to an abspath
-        output_paths = [output_dir + path for path in input_paths]
-        return input_paths, output_paths
+        # normpath manages // in particular.
+        output_paths = [os.path.normpath(output_dir + path) for path in input_paths]
+        return input_paths, output_paths,
 
     def share_files(
             self,
@@ -125,8 +170,17 @@ class BaseGateway():
             The output paths that were shared.
 
         Raises:
-            ValueError if any invalid paths are passed.
+            GatewayRuntimeError if any invalid paths are passed.
         '''
+        if self.file_share_dir and not self._shared_a_file:
+            if os.path.exists(self.file_share_dir) and (not os.path.isdir(self.file_share_dir) or len(os.listdir(self.file_share_dir)) > 0):
+                raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, '`file_share_dir` must be an empty directory.')
+            os.makedirs(self.file_share_dir, exist_ok=True)
+            self._shared_a_file = True
+
+        if not input_paths:
+            raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, 'share_files requires at least one input path')
+
         input_paths, output_paths = self._standardize_and_validate_paths(input_paths)
         for in_path, out_path in zip(input_paths, output_paths):
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -136,13 +190,25 @@ class BaseGateway():
             if IS_RERUN:
                 if not os.path.isdir(out_path):
                     pathlib.Path(out_path).touch()
-                subprocess.run(f'mount --bind {in_path} {out_path}', shell=True, check=True)
+                try:
+                    subprocess.run(f'mount --bind {in_path} {out_path}', shell=True, check=True)
+                except Exception:
+                    # `mount`` is expected to be faster but less reliable in our context.
+                    # Fall back to cp if possible.
+                    if self.file_share_dir != _FILE_SHARE_DIR:
+                        raise GatewayRuntimeError(
+                            GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                            f"share_files fallback failure: can only use cp if file_share_dir is {_FILE_SHARE_DIR}. Got {self.file_share_dir}"
+                        )
+                    # cp will fail if the output directory doesn't already exist
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    subprocess.run(f'cp -r {in_path} {out_path}', shell=True, check=True)
             else:
                 subprocess.run(f'ln -s {in_path} {out_path}', shell=True, check=True)
 
         return output_paths
 
-    def write_submission(self, predictions):
+    def write_submission(self, predictions, row_ids: List[Union[pl.Series, pl.DataFrame, pd.Series, pd.DataFrame]]):
         ''' Export the predictions to a submission.parquet.'''
         if isinstance(predictions, list):
             if isinstance(predictions[0], pd.DataFrame):
@@ -154,13 +220,26 @@ class BaseGateway():
                     raise GatewayRuntimeError(GatewayRuntimeErrorType.INVALID_SUBMISSION, 'Inconsistent prediction types')
                 except pl.exceptions.ComputeError:
                     raise GatewayRuntimeError(GatewayRuntimeErrorType.INVALID_SUBMISSION, 'Inconsistent prediction column counts')
+            else:
+                if type(row_ids[0]) in [pl.Series, pl.DataFrame]:
+                    row_ids = pl.concat(row_ids)
+                elif type(row_ids[0]) in [pd.Series, pd.DataFrame]:
+                    row_ids = pd.concat(row_ids).reset_index(drop=True)
+                else:
+                    raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, f'Invalid row ID datatype {type(row_ids[0])}. Expected Polars series or dataframe.')
+                if self.target_column_name is None:
+                    raise GatewayRuntimeError(GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION, '`target_column_name` must be set in order to use scalar value predictions.')
+                predictions = pl.DataFrame(data={row_ids.columns[0]: row_ids, self.target_column_name: predictions})
 
         if isinstance(predictions, pd.DataFrame):
             predictions.to_parquet('submission.parquet', index=False)
         elif isinstance(predictions, pl.DataFrame):
             pl.DataFrame(predictions).write_parquet('submission.parquet')
         else:
-            raise ValueError(f"Unsupported predictions type {type(predictions)}; can't write submission file")
+            raise GatewayRuntimeError(
+                GatewayRuntimeErrorType.GATEWAY_RAISED_EXCEPTION,
+                f"Unsupported predictions type {type(predictions)}; can't write submission file"
+            )
 
     def write_result(self, error: Optional[GatewayRuntimeError]=None):
         ''' Export a result.json containing error details if applicable.'''
@@ -191,5 +270,7 @@ class BaseGateway():
             raise GatewayRuntimeError(GatewayRuntimeErrorType.SERVER_RAISED_EXCEPTION, message) from None
         if isinstance(exception, grpc._channel._InactiveRpcError):
             raise GatewayRuntimeError(GatewayRuntimeErrorType.SERVER_CONNECTION_FAILED, exception_str) from None
+        if isinstance(exception, kaggle_evaluation.core.relay.GRPCDeadlineError):
+            raise GatewayRuntimeError(GatewayRuntimeErrorType.GRPC_DEADLINE_EXCEEDED, exception_str) from None
 
         raise exception
