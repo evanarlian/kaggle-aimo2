@@ -227,7 +227,6 @@ async def solve_one(
     """Manages workers (parallel calls to vllm)"""
     allowed_time = timer.start_question()
     print(f"[{q_id}] allowed time: {allowed_time}")
-    print(f"[{q_id}] creating {cfg.n_parallel} workers")
     # create multiple openai clients
     client1 = AsyncOpenAI(base_url=cfg.model_1.base_url, api_key="-")
     client2 = AsyncOpenAI(base_url=cfg.model_2.base_url, api_key="-")
@@ -301,26 +300,26 @@ if is_kaggle():
 else:
     cfg = Config(
         model_1=ModelInfo(
-            n_parallel=12,
+            n_parallel=4,
             name="casperhansen/deepseek-r1-distill-qwen-1.5b-awq",
             base_url="http://localhost:8001/v1",
         ),
         model_2=ModelInfo(
-            n_parallel=12,
+            n_parallel=4,
             name="casperhansen/deepseek-r1-distill-qwen-1.5b-awq",
-            base_url="http://localhost:8002/v1",
+            base_url="http://localhost:8001/v1",
         ),
         model_3=ModelInfo(
-            n_parallel=32,
+            n_parallel=4,
             name="casperhansen/deepseek-r1-distill-qwen-1.5b-awq",
-            base_url="http://localhost:8003/v1",
+            base_url="http://localhost:8001/v1",
         ),
         model_prm=ModelInfo(
             n_parallel=-1,  # does not apply
             name="Qwen/Qwen2.5-Math-PRM-7B",
             base_url="http://localhost:8004",
         ),
-        n_first=24,  # TODO
+        n_first=8,
         grammar_dir=Path("aimo2/parser"),
         num_questions=3,
         hours=0.3,

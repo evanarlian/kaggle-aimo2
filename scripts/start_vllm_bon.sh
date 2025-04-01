@@ -9,5 +9,5 @@ set -Eeuxo pipefail
 
 MODEL=casperhansen/deepseek-r1-distill-qwen-1.5b-awq
 
-uv run uvicorn aimo2.fake_prm_server:app --port=8004 &
+uv run uvicorn aimo2.fake_prm_server:app --port=8004 --log-level=error &
 uv run vllm serve $MODEL --port=8001 

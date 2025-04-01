@@ -3,6 +3,7 @@ import random
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+print("🚀 Running fake PRM server for Qwen/Qwen2.5-Math-PRM-7B")
 app = FastAPI()
 
 
@@ -37,7 +38,3 @@ async def fake_prm(req: FakeInput):
             "prompt_tokens_details": None,
         },
     }
-
-
-if __name__ == "__main__":
-    print("🚀 Running fake PRM server for Qwen/Qwen2.5-Math-PRM-7B")
