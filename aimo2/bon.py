@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
+import numpy as np
 import polars as pl
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -51,11 +52,12 @@ class ConversationResult(BaseModel):
 
 
 class ConversationReport(ConversationResult):
-    """Wraps core and adding admin stuffs"""
+    """Wraps core and adds admin stuffs"""
 
     q_id: str
     question: str
     gt_answer: Optional[int]
+    model: str
     elapsed: float
     tok_per_sec: float
 
@@ -210,6 +212,7 @@ async def worker(
         q_id=q_id,
         question=q_text,
         gt_answer=gt_answer,
+        model=reasoning_model,
         elapsed=elapsed,
         tok_per_sec=convo.n_tokens / elapsed,
     )
@@ -239,7 +242,7 @@ async def solve_one(
     for _ in range(cfg.model_3.n_parallel):
         worker_tasks.append(worker(q_text, q_id, gt_answer, client3, cfg.model_3.name, prm_tokenizer, parser, cfg))  # fmt: skip
     # only grab the fastest ones, but still under time limit
-    convo_reports = []
+    convo_reports: list[ConversationReport] = []
     for done in islice(
         asyncio.as_completed(worker_tasks, timeout=allowed_time), cfg.n_first
     ):
@@ -258,8 +261,19 @@ async def solve_one(
     with open(cfg.exp_path, "w") as f:
         json.dump(existing, f, indent=4)
     print(f"[{q_id}] convos added to {cfg.exp_path}")
-    # do something with the rewards
-    answer = -7  # TODO
+    # do agg with the rewards, currently just simple mean
+    all_rewards_agg = []
+    all_answers = []
+    for c in convo_reports:
+        if c.boxed_answer is None or c.parsed_answer is None or c.rewards is None:
+            continue
+        all_rewards_agg.append(np.mean(c.rewards).item())
+        all_answers.append(c.parsed_answer)
+    if all_answers == []:
+        answer = 0  # fallback
+    else:
+        answer = all_answers[np.argmax(all_rewards_agg)]
+    print(f"[{q_id}] FINAL answer: {answer}")
     # complete!
     timer.finish_question()
     return answer
@@ -268,21 +282,20 @@ async def solve_one(
 ########################################################################################
 
 if is_kaggle():
-    # TODO configure n parallel
     cfg = Config(
         model_1=ModelInfo(
-            n_parallel=12,
+            n_parallel=8,
             name="/kaggle/input/deepseek-r1/transformers/deepseek-r1-distill-qwen-7b-awq-casperhansen/1",
             base_url="http://localhost:8001/v1",
         ),
         model_2=ModelInfo(
-            n_parallel=12,
-            name="/kaggle/input/open-r1/transformers/openr1-qwen-7b-awq/1/openr1_awq",
+            n_parallel=8,
+            name="/kaggle/input/deepseek-r1/transformers/deepseek-r1-distill-qwen-7b-awq-casperhansen/1",
             base_url="http://localhost:8002/v1",
         ),
         model_3=ModelInfo(
-            n_parallel=32,
-            name="/kaggle/input/deepscaler/transformers/deepscaler-1.5b-preview-awq/1/deepscaler_awq",
+            n_parallel=8,
+            name="/kaggle/input/open-r1/transformers/openr1-qwen-7b-awq/1/openr1_awq",
             base_url="http://localhost:8003/v1",
         ),
         model_prm=ModelInfo(
@@ -290,7 +303,7 @@ if is_kaggle():
             name="/kaggle/input/qwen2.5-math/transformers/qwen2.5-math-prm-7b/1/qwen_math_prm",
             base_url="http://localhost:8004",  # pooling requires no "v1"
         ),
-        n_first=24,  # TODO
+        n_first=16,
         grammar_dir=Path("parser"),
         num_questions=50,
         hours=5,
