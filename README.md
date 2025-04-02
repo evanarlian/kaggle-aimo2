@@ -20,7 +20,7 @@ Run majority voting based solution
 uv run -m aimo2.maj
 ```
 
-Run reward model based solution
+Run reward model based solution, note that this one will use fake PRM server and not the real Qwen math PRM.
 ```bash
 ./scripts/start_vllm_bon.sh
 
