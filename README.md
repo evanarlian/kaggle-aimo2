@@ -63,43 +63,6 @@ uv run pytest
 ```
 
 
-# TODO
-*  MODEL=evanarlian/DeepScaleR-1.5B-Preview-AWQ
-* change vllm scripts to handle mutiple model later: prm, 3 llm
-* test time scaling that might work: BoN, we2ighted BoN, new microsoft paper
-* increase n_parallel since we have used temp for speed demon
-* test-time scaling tricks:
-
-* reward model
-  * standard PRM (Qwen PRM 7B is good)
-  * entropy score (almost free to use)
-* read last year winning solution. here is huikangs recap: https://www.kaggle.com/competitions/ai-mathematical-olympiad-progress-prize-2/discussion/546772. Note that from last year solution, there are path without training at all
-  * 3rd (https://www.kaggle.com/competitions/ai-mathematical-olympiad-prize/discussion/517206)
-    * parallel in batches
-    * penalize small number <10, or numbers that appear on problem stmt
-    * executing code during generation, the stuff codegen using logits processor. NOTE: how to do this using openai compatible server?
-  * 4th (https://www.kaggle.com/competitions/ai-mathematical-olympiad-prize/discussion/518960)
-    * use good evals
-    * play with timings (TimeManager class)
-    * dual gpu inference using threadpool
-
-
-# vllm tune (do this on real kaggle submit kernel after modifying prompt forcing)
-* preempt issues on check, see https://docs.vllm.ai/en/latest/performance/optimization.html.
-* check vllm logs in kaggle to document mem used for gpu, for peak, for kv cache. Make sure the kv cache data type and use https://lmcache.ai/kv_cache_calculator.html to calculate.
-
-
-# vast ai todo
-* dont do vast, not important for inference
-* vast startup script change
-* deactivate original venv (DONT nuke because it has jupyter)
-* how to predownload using hf cli?
-* setup nginx how
-* disable workspace thingy and deactivate WORKSPACE line in bashrc
-* try on cheap machines to learn about the vastai docker
-* launch mode jupyter lab?
-
-
 # notes
 * this competition is all about inference time scaling:
   * majority-voting / self concistency (SC): easiest to do
@@ -114,3 +77,4 @@ uv run pytest
 * use temp 1.0 (default) because it will speed up a lot, need to check if the speed up worth not using lower temp.
 * deepseek r1 series offical recommendation: https://github.com/deepseek-ai/DeepSeek-R1?tab=readme-ov-file#usage-recommendations
 * Qwen math PRM is not useful for steps inside deepseek's think token, there are no meaningful differences between wrong score and correct score, everything will be scored high.
+* PRM does not work well in my case, putting the steps after </ think> token to PRM
