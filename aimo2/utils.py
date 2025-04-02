@@ -47,6 +47,8 @@ def wib_now() -> str:
 
 
 def is_kaggle() -> bool:
+    # TODO is can be changed to return 3 literals, i.e.: interactive, submission, and not kaggle
+    # a lot of code requires different treatment (setup, etc) based on these 3 things
     return bool(
         os.getenv("KAGGLE_KERNEL_RUN_TYPE") or os.getenv("KAGGLE_IS_COMPETITION_RERUN")
     )
